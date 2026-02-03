@@ -1,0 +1,199 @@
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+
+function getToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("token");
+}
+
+export async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = getToken();
+
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
+  };
+
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
+  }
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    let message = "Request failed";
+    try {
+      const data = await res.json();
+      message = data.message || message;
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  if (res.status === 204) {
+    // No Content
+    return undefined as T;
+  }
+
+  return res.json();
+}
+
+// Auth
+export async function loginApi(email: string, password: string) {
+  return apiFetch<{ access_token: string }>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function registerApi(data: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  return apiFetch<{ id: string; email: string; name: string; role: string }>(
+    "/auth/register",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+export type DashboardModuleKey =
+  | "dashboard-overview"
+  | "gaming"
+  | "snooker"
+  | "table-tennis"
+  | "cricket"
+  | "futsal-turf"
+  | "padel"
+  | "locations"
+  | "users"
+  | "bookings"
+  | "analytics"
+  | "settings";
+
+export interface AuthUserProfile {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "client" | "user";
+  /**
+   * Optional list of dashboard modules this user is allowed to see.
+   *
+   * If undefined or empty, the frontend will fall back to role-based
+   * visibility rules.
+   */
+  modules?: DashboardModuleKey[] | null;
+}
+
+export async function getProfileApi() {
+  return apiFetch<AuthUserProfile>("/auth/profile");
+}
+
+// Users (admin)
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "client" | "user";
+  modules?: DashboardModuleKey[] | null;
+}
+
+export async function getUsersApi() {
+  return apiFetch<AdminUserSummary[]>("/users");
+}
+
+export async function getUserByIdApi(id: string) {
+  return apiFetch<AdminUserSummary>(`/users/${id}`);
+}
+
+export async function updateUserModulesApi(
+  id: string,
+  modules: DashboardModuleKey[] | null
+) {
+  return apiFetch<AdminUserSummary>(`/users/${id}/modules`, {
+    method: "PATCH",
+    body: JSON.stringify({ modules }),
+  });
+}
+
+export async function uploadImageApi(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return apiFetch<{ url: string; filename: string; size: number }>(
+    "/auth/upload",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+}
+
+// Locations
+export interface Location {
+  id: string;
+  client_id: string;
+  name: string;
+  description?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function getLocationsApi(clientId?: string) {
+  const query = clientId ? `?clientId=${encodeURIComponent(clientId)}` : "";
+  return apiFetch<Location[]>(`/locations${query}`);
+}
+
+// Gaming facilities
+export type GamingStatus = "active" | "inactive" | "maintenance";
+
+export interface GamingCenter {
+  id: string;
+  client_id: string;
+  admin_id: string;
+  name: string;
+  description?: string | null;
+  phone?: string | null;
+  status: GamingStatus;
+  logo_url?: string | null;
+  cover_image_url?: string | null;
+  amenities?: string[] | null;
+  hourly_rate?: number | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function getGamingCentersApi(clientId?: string) {
+  const query = clientId ? `?clientId=${encodeURIComponent(clientId)}` : "";
+  return apiFetch<GamingCenter[]>(`/gaming${query}`);
+}
+
