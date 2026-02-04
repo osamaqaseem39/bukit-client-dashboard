@@ -197,3 +197,70 @@ export async function getGamingCentersApi(clientId?: string) {
   return apiFetch<GamingCenter[]>(`/gaming${query}`);
 }
 
+// Clients (business onboarding)
+export interface CreateClientWithUserPayload {
+  company_name: string;
+  legal_name?: string;
+  contact_name: string;
+  email: string;
+  phone: string;
+  address?: string;
+  city: string;
+  country: string;
+  tax_id?: string;
+  company_registration_number?: string;
+  description?: string;
+  logo_url?: string;
+}
+
+export async function createClientWithUserApi(
+  payload: CreateClientWithUserPayload
+) {
+  // Prefer dedicated register-client endpoint when available
+  return apiFetch<any>("/auth/register-client", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface LocationPayload {
+  id?: string;
+  client_id?: string;
+  name: string;
+  description?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export async function createLocationApi(payload: LocationPayload) {
+  return apiFetch<Location>("/locations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type FacilityStatus = "active" | "inactive" | "maintenance";
+
+export interface FacilityPayload {
+  id?: string;
+  location_id: string;
+  name: string;
+  type: string;
+  status: FacilityStatus;
+  capacity?: number;
+  metadata?: Record<string, any>;
+}
+
+export async function createFacilityApi(payload: FacilityPayload) {
+  return apiFetch<any>("/facilities", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
