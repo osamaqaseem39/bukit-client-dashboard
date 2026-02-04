@@ -1,11 +1,10 @@
-\"use client\";
+"use client";
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import Modal from "@/components/ui/Modal";
 import {
   createClientWithUserApi,
   createFacilityApi,
@@ -32,6 +31,9 @@ export default function ClientOnboardingPage() {
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [locationChoices, setLocationChoices] = useState<
+    { id: string; name: string }[]
+  >([]);
 
   // Step 1: Business information
   const [businessForm, setBusinessForm] = useState({
@@ -83,18 +85,13 @@ export default function ClientOnboardingPage() {
     initialErrorState
   );
 
-  const canGoBack = currentStep > 1;
-  const canGoNext = currentStep < 3;
-
   const locationOptions = useMemo(
     () =>
-      locations
-        .map((loc, index) => ({
-          index,
-          label: loc.name || `Location ${index + 1}`,
-        }))
-        .filter((opt) => opt.label.trim().length > 0),
-    [locations]
+      locationChoices.map((loc) => ({
+        id: loc.id,
+        label: loc.name || "Unnamed location",
+      })),
+    [locationChoices]
   );
 
   function goToStep(step: WizardStep) {
@@ -369,6 +366,7 @@ export default function ClientOnboardingPage() {
 
       // Pre-populate facilities location_id with the first created location if empty
       if (createdLocations.length > 0) {
+        setLocationChoices(createdLocations);
         setFacilities((prev) =>
           prev.map((fac) =>
             !fac.location_id
@@ -398,22 +396,13 @@ export default function ClientOnboardingPage() {
         await createFacilityApi(fac);
       }
 
-      // On success, show confirmation and redirect to dashboard or clients list
-      setIsSubmitting(false);
-      Modal.show({
-        title: "Client onboarded",
-        content:
-          "The new business, its locations, and facilities have been created successfully.",
-        onConfirm: () => {
-          router.push("/dashboard");
-        },
-      } as any);
+      // On success, redirect to dashboard or clients list
+      router.push("/dashboard");
     } catch (err: any) {
       setStep3Errors({
         global: err.message || "Failed to create facilities",
         fields: {},
       });
-      setIsSubmitting(false);
     }
   }
 
@@ -866,10 +855,7 @@ export default function ClientOnboardingPage() {
                       >
                         <option value="">Select a location</option>
                         {locationOptions.map((opt) => (
-                          <option
-                            key={opt.index}
-                            value={String(opt.index)}
-                          >
+                          <option key={opt.id} value={opt.id}>
                             {opt.label}
                           </option>
                         ))}
