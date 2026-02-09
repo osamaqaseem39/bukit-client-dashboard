@@ -19,6 +19,7 @@ import {
   Activity,
   Footprints,
   Crosshair,
+  Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DashboardModuleKey } from "@/lib/api";
@@ -47,6 +48,12 @@ const navItems: NavItem[] = [
     href: "/dashboard",
     icon: <LayoutDashboard className="h-5 w-5" />,
     moduleKey: "dashboard-overview",
+  },
+  {
+    label: "Business Setup",
+    href: "/dashboard/setup",
+    icon: <Briefcase className="h-5 w-5" />,
+    roles: ["admin"],
   },
   {
     label: "Gaming",
