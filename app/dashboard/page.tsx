@@ -285,10 +285,10 @@ export default function DashboardPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Booking ID</TableHead>
-                  <TableHead>Customer</TableHead>
+                  <TableHead>Location</TableHead>
                   <TableHead>Facility</TableHead>
-                  <TableHead>Date &amp; Time</TableHead>
-                  <TableHead>Amount</TableHead>
+                  <TableHead>Start</TableHead>
+                  <TableHead>End</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -296,18 +296,22 @@ export default function DashboardPage() {
                 {recentBookings.map((booking) => (
                   <TableRow key={booking.id}>
                     <TableCell className="font-medium">{booking.id}</TableCell>
-                    <TableCell>{booking.customer}</TableCell>
-                    <TableCell>{booking.facility}</TableCell>
+                    <TableCell>{booking.location_id}</TableCell>
+                    <TableCell>{booking.facility_id ?? "—"}</TableCell>
                     <TableCell>
-                      {booking.date} at {booking.time}
+                      {new Date(booking.start_time).toLocaleString()}
                     </TableCell>
-                    <TableCell>{formatCurrency(booking.amount)}</TableCell>
+                    <TableCell>
+                      {new Date(booking.end_time).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                           booking.status === "confirmed"
                             ? "bg-success/10 text-success"
-                            : "bg-warning/10 text-warning"
+                            : booking.status === "pending"
+                            ? "bg-warning/10 text-warning"
+                            : "bg-error/10 text-error"
                         }`}
                       >
                         {booking.status}
