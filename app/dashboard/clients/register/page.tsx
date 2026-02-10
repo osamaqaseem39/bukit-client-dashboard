@@ -49,6 +49,7 @@ export default function ClientOnboardingPage() {
     registrationNumber: "",
     description: "",
     logoUrl: "",
+    adminPassword: "",
   });
   const [step1Errors, setStep1Errors] = useState<StepErrorState>(
     initialErrorState
@@ -219,6 +220,11 @@ export default function ClientOnboardingPage() {
     if (!businessForm.country.trim()) {
       errors.fields.country = "Country is required";
     }
+    if (!businessForm.adminPassword.trim()) {
+      errors.fields.adminPassword = "Admin password is required";
+    } else if (businessForm.adminPassword.trim().length < 6) {
+      errors.fields.adminPassword = "Password must be at least 6 characters";
+    }
 
     if (Object.keys(errors.fields).length > 0) {
       errors.global = "Please fill in all required fields.";
@@ -298,19 +304,29 @@ export default function ClientOnboardingPage() {
     setIsSubmitting(true);
     try {
       const payload = {
-        company_name: businessForm.companyName,
-        legal_name: businessForm.legalName || undefined,
-        contact_name: businessForm.contactName,
-        email: businessForm.email,
-        phone: businessForm.phone,
-        address: businessForm.address || undefined,
-        city: businessForm.city,
-        country: businessForm.country,
-        tax_id: businessForm.taxId || undefined,
-        company_registration_number:
-          businessForm.registrationNumber || undefined,
-        description: businessForm.description || undefined,
-        logo_url: businessForm.logoUrl || undefined,
+        user: {
+          name:
+            businessForm.contactName.trim() ||
+            businessForm.companyName.trim() ||
+            businessForm.email,
+          email: businessForm.email,
+          password: businessForm.adminPassword,
+        },
+        client: {
+          company_name: businessForm.companyName,
+          legal_name: businessForm.legalName || undefined,
+          contact_name: businessForm.contactName,
+          email: businessForm.email,
+          phone: businessForm.phone,
+          address: businessForm.address || undefined,
+          city: businessForm.city,
+          country: businessForm.country,
+          tax_id: businessForm.taxId || undefined,
+          company_registration_number:
+            businessForm.registrationNumber || undefined,
+          description: businessForm.description || undefined,
+          logo_url: businessForm.logoUrl || undefined,
+        },
       };
 
       const result = await createClientWithUserApi(payload);
@@ -517,6 +533,16 @@ export default function ClientOnboardingPage() {
                   handleBusinessChange("phone", e.target.value)
                 }
                 error={step1Errors.fields.phone ?? undefined}
+              />
+              <Input
+                label="Admin password *"
+                type="password"
+                placeholder="Set an admin password for this business"
+                value={businessForm.adminPassword}
+                onChange={(e) =>
+                  handleBusinessChange("adminPassword", e.target.value)
+                }
+                error={step1Errors.fields.adminPassword ?? undefined}
               />
               <Input
                 label="Address"

@@ -229,7 +229,13 @@ export async function getClientStatisticsApi() {
 }
 
 // Clients (business onboarding)
-export interface CreateClientWithUserPayload {
+export interface CreateClientUserPayload {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface CreateClientProfilePayload {
   company_name: string;
   legal_name?: string;
   contact_name: string;
@@ -244,10 +250,15 @@ export interface CreateClientWithUserPayload {
   logo_url?: string;
 }
 
+export interface CreateClientWithUserPayload {
+  user: CreateClientUserPayload;
+  client: CreateClientProfilePayload;
+}
+
 export async function createClientWithUserApi(
   payload: CreateClientWithUserPayload
 ) {
-  // Prefer dedicated register-client endpoint when available
+  // Uses the dedicated register-client endpoint which creates both user and client
   return apiFetch<any>("/auth/register-client", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -294,4 +305,37 @@ export async function createFacilityApi(payload: FacilityPayload) {
     body: JSON.stringify(payload),
   });
 }
+
+// Facilities
+export interface Facility {
+  id: string;
+  location_id: string;
+  name: string;
+  type: string;
+  status: FacilityStatus;
+  capacity?: number | null;
+  metadata?: Record<string, any> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface GetFacilitiesParams {
+  search?: string;
+  type?: string;
+  location_id?: string;
+}
+
+export async function getFacilitiesApi(params: GetFacilitiesParams = {}) {
+  const query = new URLSearchParams();
+
+  if (params.search) query.set("search", params.search);
+  if (params.type) query.set("type", params.type);
+  if (params.location_id) query.set("location_id", params.location_id);
+
+  const qs = query.toString();
+  const path = qs ? `/facilities?${qs}` : "/facilities";
+
+  return apiFetch<Facility[]>(path);
+}
+
 
