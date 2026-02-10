@@ -13,14 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import {
-  Facility,
-  FacilityStatus,
-  GetFacilitiesParams,
-  Location,
-  getFacilitiesApi,
-  getLocationsApi,
-} from "@/lib/api";
+import type { Facility, FacilityStatus, GetFacilitiesParams, Location } from "@/lib/api";
+import { getFacilitiesApi, getLocationsApi } from "@/lib/api";
 
 const FACILITY_TYPE_LABELS: Record<string, string> = {
   "gaming-pc": "Gaming PC",
@@ -113,12 +107,8 @@ export default function FacilitiesPage() {
 
   const stats = useMemo(() => {
     const total = facilities.length;
-    const active = facilities.filter(
-      (f) => f.status === FacilityStatus.ACTIVE
-    ).length;
-    const maintenance = facilities.filter(
-      (f) => f.status === FacilityStatus.MAINTENANCE
-    ).length;
+    const active = facilities.filter((f) => f.status === "active").length;
+    const maintenance = facilities.filter((f) => f.status === "maintenance").length;
 
     return { total, active, maintenance };
   }, [facilities]);
@@ -304,9 +294,9 @@ export default function FacilitiesPage() {
                       <TableCell>
                         <span
                           className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                            facility.status === FacilityStatus.ACTIVE
+                            facility.status === "active"
                               ? "bg-success/10 text-success"
-                              : facility.status === FacilityStatus.MAINTENANCE
+                              : facility.status === "maintenance"
                               ? "bg-warning/10 text-warning"
                               : "bg-border text-text-secondary"
                           }`}
