@@ -8,7 +8,15 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import { getProfileApi, loginApi, DashboardModuleKey } from "@/lib/api";
+import {
+  getProfileApi,
+  loginApi,
+  DashboardModuleKey,
+  getAccessToken,
+  setAuthTokens,
+  clearAuthTokens,
+  logoutApi,
+} from "@/lib/api";
 
 type UserRole = "admin" | "client" | "user";
 
@@ -53,8 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const token =
-      typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const token = getAccessToken();
     if (token) {
       loadUser();
     } else {
@@ -80,7 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     const data = await loginApi(email, password);
     if (typeof window !== "undefined") {
-      localStorage.setItem("token", data.access_token);
+      setAuthTokens({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+      });
     }
     await loadUser();
     router.replace("/dashboard");
@@ -88,7 +98,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("token");
+      // Best-effort backend logout; ignore errors
+      logoutApi().catch(() => {});
+      clearAuthTokens();
     }
     setUser(null);
     router.replace("/login");

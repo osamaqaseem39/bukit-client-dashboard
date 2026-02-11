@@ -56,6 +56,12 @@ const navItems: NavItem[] = [
     roles: ["admin"],
   },
   {
+    label: "Businesses",
+    href: "/dashboard/clients",
+    icon: <Briefcase className="h-5 w-5" />,
+    roles: ["admin"],
+  },
+  {
     label: "Gaming",
     href: "/dashboard/gaming",
     icon: <Gamepad2 className="h-5 w-5" />,
@@ -103,6 +109,14 @@ const navItems: NavItem[] = [
     icon: <MapPin className="h-5 w-5" />,
     roles: ["admin", "client"],
     moduleKey: "locations",
+  },
+  {
+    label: "Facilities",
+    href: "/dashboard/facilities",
+    icon: <CircleDot className="h-5 w-5" />,
+    roles: ["client"],
+    // No moduleKey yet so it's available to all client users;
+    // can be module-gated later when backend exposes a facilities module key.
   },
   {
     label: "Users",

@@ -1,16 +1,41 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
 
-function getToken() {
+const ACCESS_TOKEN_KEY = "token";
+const REFRESH_TOKEN_KEY = "refresh_token";
+
+export function getAccessToken() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function getRefreshToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setAuthTokens(params: {
+  accessToken: string;
+  refreshToken?: string;
+}) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ACCESS_TOKEN_KEY, params.accessToken);
+  if (params.refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, params.refreshToken);
+  }
+}
+
+export function clearAuthTokens() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getToken();
+  const token = getAccessToken();
 
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
@@ -20,15 +45,61 @@ export async function apiFetch<T>(
     headers["Content-Type"] = headers["Content-Type"] || "application/json";
   }
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  const attachAuthHeader = () => {
+    const currentToken = getAccessToken();
+    if (currentToken) {
+      headers["Authorization"] = `Bearer ${currentToken}`;
+    } else {
+      delete headers["Authorization"];
+    }
+  };
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  const doRequest = async () => {
+    attachAuthHeader();
+    return fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+  };
+
+  let res = await doRequest();
+
+  // Try refresh on unauthorized (e.g., expired access token)
+  if (
+    res.status === 401 &&
+    path !== "/auth/login" &&
+    path !== "/auth/refresh"
+  ) {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      try {
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+          credentials: "include",
+        });
+
+        if (refreshRes.ok) {
+          const data = await refreshRes.json();
+          if (data?.access_token) {
+            setAuthTokens({
+              accessToken: data.access_token,
+              refreshToken: data.refresh_token,
+            });
+            res = await doRequest();
+          }
+        } else {
+          clearAuthTokens();
+        }
+      } catch {
+        clearAuthTokens();
+      }
+    }
+  }
 
   if (!res.ok) {
     let message = "Request failed";
@@ -50,10 +121,28 @@ export async function apiFetch<T>(
 }
 
 // Auth
+export interface LoginResponse {
+  access_token: string;
+  refresh_token?: string;
+}
+
 export async function loginApi(email: string, password: string) {
-  return apiFetch<{ access_token: string }>("/auth/login", {
+  return apiFetch<LoginResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logoutApi(refreshToken?: string | null) {
+  const body: Record<string, string> = {};
+  const token = refreshToken ?? getRefreshToken();
+  if (token) {
+    body.refresh_token = token;
+  }
+
+  return apiFetch<void>("/auth/logout", {
+    method: "POST",
+    body: Object.keys(body).length ? JSON.stringify(body) : undefined,
   });
 }
 
@@ -226,6 +315,48 @@ export interface ClientStatistics {
 
 export async function getClientStatisticsApi() {
   return apiFetch<ClientStatistics>("/clients/statistics");
+}
+
+// Clients list/detail
+export interface ClientSummary {
+  id: string;
+  user_id: string;
+  company_name: string;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  city?: string | null;
+  country?: string | null;
+  status: "pending" | "approved" | "rejected" | "suspended" | "active";
+  logo_url?: string | null;
+  locations_count?: number;
+  facilities_count?: number;
+}
+
+export async function getClientsApi() {
+  return apiFetch<ClientSummary[]>("/clients");
+}
+
+export interface UpdateClientPayload {
+  company_name?: string;
+  legal_name?: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  tax_id?: string | null;
+  company_registration_number?: string | null;
+  description?: string | null;
+  logo_url?: string | null;
+}
+
+export async function updateClientApi(id: string, payload: UpdateClientPayload) {
+  return apiFetch<ClientSummary>(`/clients/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 // Clients (business onboarding)

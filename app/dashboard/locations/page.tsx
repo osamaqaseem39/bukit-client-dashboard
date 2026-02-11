@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { MapPin, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -15,6 +16,9 @@ import {
 import { Location, getLocationsApi } from "@/lib/api";
 
 export default function LocationsPage() {
+  const searchParams = useSearchParams();
+  const clientId = searchParams.get("clientId") || undefined;
+
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +26,7 @@ export default function LocationsPage() {
   useEffect(() => {
     let isMounted = true;
 
-    getLocationsApi()
+    getLocationsApi(clientId)
       .then((data) => {
         if (isMounted) {
           setLocations(data);
@@ -42,7 +46,7 @@ export default function LocationsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [clientId]);
 
   return (
     <div className="space-y-6">
