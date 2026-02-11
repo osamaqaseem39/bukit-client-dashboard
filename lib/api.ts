@@ -359,6 +359,33 @@ export async function updateClientApi(id: string, payload: UpdateClientPayload) 
   });
 }
 
+// Client status actions (admin)
+export async function approveClientApi(id: string) {
+  return apiFetch<ClientSummary>(`/clients/${id}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function rejectClientApi(id: string, reason: string) {
+  return apiFetch<ClientSummary>(`/clients/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function suspendClientApi(id: string, reason: string) {
+  return apiFetch<ClientSummary>(`/clients/${id}/suspend`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function activateClientApi(id: string) {
+  return apiFetch<ClientSummary>(`/clients/${id}/activate`, {
+    method: "POST",
+  });
+}
+
 // Clients (business onboarding)
 export interface CreateClientUserPayload {
   name: string;

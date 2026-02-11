@@ -16,7 +16,14 @@ import {
 } from "@/components/ui/Table";
 import Modal from "@/components/ui/Modal";
 import type { ClientSummary, UpdateClientPayload } from "@/lib/api";
-import { getClientsApi, updateClientApi } from "@/lib/api";
+import {
+  getClientsApi,
+  updateClientApi,
+  approveClientApi,
+  rejectClientApi,
+  suspendClientApi,
+  activateClientApi,
+} from "@/lib/api";
 
 type ViewMode = "grid" | "list";
 
@@ -54,6 +61,8 @@ export default function ClientsPage() {
   const [editForm, setEditForm] = useState<UpdateClientPayload>({});
   const [editError, setEditError] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -138,6 +147,54 @@ export default function ClientsPage() {
     router.push(`/dashboard/locations?clientId=${encodeURIComponent(client.id)}`);
   }
 
+  async function handleChangeStatus(
+    client: ClientSummary,
+    action: "approve" | "reject" | "suspend" | "activate"
+  ) {
+    try {
+      setStatusUpdatingId(client.id);
+      setStatusError(null);
+
+      let updated: ClientSummary | null = null;
+
+      if (action === "approve") {
+        updated = await approveClientApi(client.id);
+      } else if (action === "activate") {
+        updated = await activateClientApi(client.id);
+      } else if (action === "reject") {
+        const reason =
+          typeof window !== "undefined"
+            ? window.prompt("Enter rejection reason:", "") || ""
+            : "";
+        if (!reason.trim()) {
+          setStatusUpdatingId(null);
+          return;
+        }
+        updated = await rejectClientApi(client.id, reason);
+      } else if (action === "suspend") {
+        const reason =
+          typeof window !== "undefined"
+            ? window.prompt("Enter suspension reason:", "") || ""
+            : "";
+        if (!reason.trim()) {
+          setStatusUpdatingId(null);
+          return;
+        }
+        updated = await suspendClientApi(client.id, reason);
+      }
+
+      if (updated) {
+        setClients((prev) =>
+          prev.map((c) => (c.id === updated!.id ? { ...c, ...updated } : c))
+        );
+      }
+    } catch (err: any) {
+      setStatusError(err.message || "Failed to update status");
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -201,6 +258,12 @@ export default function ClientsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {statusError && (
+        <p className="text-sm text-error" role="alert">
+          {statusError}
+        </p>
+      )}
 
       {/* Search & filters */}
       <Card>
@@ -287,7 +350,7 @@ export default function ClientsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex flex-wrap gap-2 pt-2">
                     <Button
                       variant="secondary"
                       size="sm"
@@ -304,6 +367,72 @@ export default function ClientsPage() {
                       <MapPin className="mr-1 h-4 w-4" />
                       View locations
                     </Button>
+                    {client.status === "pending" && (
+                      <>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleChangeStatus(client, "approve")}
+                          disabled={statusUpdatingId === client.id}
+                        >
+                          {statusUpdatingId === client.id
+                            ? "Approving..."
+                            : "Approve"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleChangeStatus(client, "reject")}
+                          disabled={statusUpdatingId === client.id}
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
+                    {client.status === "approved" && (
+                      <>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleChangeStatus(client, "activate")}
+                          disabled={statusUpdatingId === client.id}
+                        >
+                          {statusUpdatingId === client.id
+                            ? "Activating..."
+                            : "Activate"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleChangeStatus(client, "suspend")}
+                          disabled={statusUpdatingId === client.id}
+                        >
+                          Suspend
+                        </Button>
+                      </>
+                    )}
+                    {client.status === "active" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleChangeStatus(client, "suspend")}
+                        disabled={statusUpdatingId === client.id}
+                      >
+                        Suspend
+                      </Button>
+                    )}
+                    {client.status === "suspended" && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleChangeStatus(client, "activate")}
+                        disabled={statusUpdatingId === client.id}
+                      >
+                        {statusUpdatingId === client.id
+                          ? "Activating..."
+                          : "Activate"}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -371,7 +500,7 @@ export default function ClientsPage() {
                       <TableCell>{client.locations_count ?? "—"}</TableCell>
                       <TableCell>{client.facilities_count ?? "—"}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -387,6 +516,84 @@ export default function ClientsPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          {client.status === "pending" && (
+                            <>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() =>
+                                  handleChangeStatus(client, "approve")
+                                }
+                                disabled={statusUpdatingId === client.id}
+                              >
+                                {statusUpdatingId === client.id
+                                  ? "Approving..."
+                                  : "Approve"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleChangeStatus(client, "reject")
+                                }
+                                disabled={statusUpdatingId === client.id}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {client.status === "approved" && (
+                            <>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() =>
+                                  handleChangeStatus(client, "activate")
+                                }
+                                disabled={statusUpdatingId === client.id}
+                              >
+                                {statusUpdatingId === client.id
+                                  ? "Activating..."
+                                  : "Activate"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  handleChangeStatus(client, "suspend")
+                                }
+                                disabled={statusUpdatingId === client.id}
+                              >
+                                Suspend
+                              </Button>
+                            </>
+                          )}
+                          {client.status === "active" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleChangeStatus(client, "suspend")
+                              }
+                              disabled={statusUpdatingId === client.id}
+                            >
+                              Suspend
+                            </Button>
+                          )}
+                          {client.status === "suspended" && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() =>
+                                handleChangeStatus(client, "activate")
+                              }
+                              disabled={statusUpdatingId === client.id}
+                            >
+                              {statusUpdatingId === client.id
+                                ? "Activating..."
+                                : "Activate"}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
