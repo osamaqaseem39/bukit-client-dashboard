@@ -106,17 +106,8 @@ export default function ClientsPage() {
   }, [clients]);
 
   function openEdit(client: ClientSummary) {
-    setEditingClient(client);
-    setEditError(null);
-    setEditForm({
-      company_name: client.company_name,
-      contact_name: client.contact_name ?? "",
-      email: client.email ?? "",
-      phone: client.phone ?? "",
-      city: client.city ?? "",
-      country: client.country ?? "",
-      logo_url: client.logo_url ?? "",
-    });
+    // Navigate to the business setup form, passing the clientId
+    router.push(`/dashboard/setup?clientId=${encodeURIComponent(client.id)}`);
   }
 
   function closeEdit() {
