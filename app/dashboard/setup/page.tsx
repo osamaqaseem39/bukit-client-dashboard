@@ -151,6 +151,14 @@ export default function DashboardSetupPage() {
   }, [clientIdFromQuery]);
 
   function goToStep(step: WizardStep) {
+    // When editing, prevent navigation to step 2 if business hasn't been saved yet
+    if (isEditing && step === 2 && !clientId) {
+      setStep1Errors({
+        global: "Please save the business information first before proceeding to locations.",
+        fields: {},
+      });
+      return;
+    }
     setCurrentStep(step);
   }
 
@@ -470,6 +478,8 @@ export default function DashboardSetupPage() {
         ].map((item) => {
           const isActive = currentStep === item.step;
           const isCompleted = currentStep > (item.step as number);
+          // When editing, disable step 2 if business hasn't been saved
+          const isDisabled = isEditing && item.step === 2 && !clientId;
           return (
             <div
               key={item.step}
@@ -478,8 +488,15 @@ export default function DashboardSetupPage() {
                   ? "border-primary bg-primary/5 text-primary"
                   : isCompleted
                   ? "border-success bg-success/5 text-success"
-                  : "border-border bg-surface-elevated/60 text-text-secondary"
+                  : isDisabled
+                  ? "border-border bg-surface-elevated/30 text-text-tertiary cursor-not-allowed opacity-50"
+                  : "border-border bg-surface-elevated/60 text-text-secondary cursor-pointer hover:bg-surface-elevated"
               }`}
+              onClick={() => {
+                if (!isDisabled) {
+                  goToStep(item.step as WizardStep);
+                }
+              }}
             >
               <div className="font-medium">
                 Step {item.step}: {item.label}
@@ -488,7 +505,9 @@ export default function DashboardSetupPage() {
                 {item.step === 1 &&
                   "Enter business profile and primary contact details."}
                 {item.step === 2 &&
-                  "Add one or more branch locations for this business."}
+                  (isDisabled
+                    ? "Save business information first to proceed."
+                    : "Add one or more branch locations for this business.")}
               </div>
             </div>
           );
