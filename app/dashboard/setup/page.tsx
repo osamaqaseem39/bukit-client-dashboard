@@ -386,9 +386,8 @@ export default function DashboardSetupPage() {
 
         const result = await createClientWithUserApi(payload);
 
-        // Use user.id instead of client.id because locations.client_id references users.id
+        // Use client.id because locations.client_id now references the Client entity
         const createdClientId =
-          (result as any)?.user?.id ||
           (result as any)?.client?.id ||
           (result as any)?.client_id ||
           (result as any)?.id;
