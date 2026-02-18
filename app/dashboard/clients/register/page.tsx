@@ -265,11 +265,11 @@ export default function ClientOnboardingPage() {
         errors.fields[`${index}.country`] = "Country is required";
       }
       // Validate latitude range (-90 to 90)
-      if (loc.latitude !== undefined && (loc.latitude < -90 || loc.latitude > 90)) {
+      if (loc.latitude != null && (loc.latitude < -90 || loc.latitude > 90)) {
         errors.fields[`${index}.latitude`] = "Latitude must be between -90 and 90";
       }
       // Validate longitude range (-180 to 180)
-      if (loc.longitude !== undefined && (loc.longitude < -180 || loc.longitude > 180)) {
+      if (loc.longitude != null && (loc.longitude < -180 || loc.longitude > 180)) {
         errors.fields[`${index}.longitude`] = "Longitude must be between -180 and 180";
       }
     });
