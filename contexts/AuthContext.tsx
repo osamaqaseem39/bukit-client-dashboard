@@ -73,7 +73,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUser = async () => {
     try {
       const userData = await getProfileApi();
-      setUser(userData as User);
+      // Normalize role to lowercase to ensure consistent matching
+      const normalizedUser = {
+        ...userData,
+        role: userData.role?.toLowerCase() as UserRole,
+      };
+      setUser(normalizedUser as User);
     } catch {
       if (typeof window !== "undefined") {
         localStorage.removeItem("token");
@@ -108,11 +113,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const hasRole = useCallback(
     (roles: UserRole | UserRole[]) => {
-      if (!user) return false;
+      if (!user || !user.role) return false;
+      const userRole = user.role.toLowerCase() as UserRole;
       if (Array.isArray(roles)) {
-        return roles.includes(user.role);
+        return roles.some((role) => role.toLowerCase() === userRole);
       }
-      return user.role === roles;
+      return roles.toLowerCase() === userRole;
     },
     [user]
   );
