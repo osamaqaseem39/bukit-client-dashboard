@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Filter, MapPin, Search } from "lucide-react";
+import { Filter, MapPin, Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
 import {
   Table,
   TableBody,
@@ -13,8 +14,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import type { Facility, FacilityStatus, GetFacilitiesParams, Location } from "@/lib/api";
-import { getFacilitiesApi, getLocationsApi } from "@/lib/api";
+import type {
+  Facility,
+  FacilityStatus,
+  GetFacilitiesParams,
+  Location,
+  FacilityPayload,
+} from "@/lib/api";
+import {
+  getFacilitiesApi,
+  getLocationsApi,
+  createFacilityApi,
+} from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
 const FACILITY_TYPE_LABELS: Record<string, string> = {
   "gaming-pc": "Gaming PC",
@@ -39,48 +52,99 @@ function formatStatus(status: FacilityStatus) {
 }
 
 export default function FacilitiesPage() {
+  const { user, isClient } = useAuth();
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<string>("");
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
 
+  const [formData, setFormData] = useState<FacilityPayload>({
+    location_id: "",
+    name: "",
+    type: "other",
+    status: "active",
+    capacity: undefined,
+    metadata: undefined,
+  });
+
   useEffect(() => {
-    let isMounted = true;
+    loadData();
+  }, []);
 
-    async function loadData() {
-      setLoading(true);
-      setError(null);
+  async function loadData() {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const [facilitiesRes, locationsRes] = await Promise.all([
-          getFacilitiesApi({} as GetFacilitiesParams),
-          getLocationsApi(),
-        ]);
+    try {
+      // For clients, don't pass clientId - backend will filter by authenticated user
+      const clientId = isClient() ? undefined : undefined;
+      const [facilitiesRes, locationsRes] = await Promise.all([
+        getFacilitiesApi({} as GetFacilitiesParams),
+        getLocationsApi(clientId),
+      ]);
 
-        if (!isMounted) return;
+      setFacilities(facilitiesRes);
+      setLocations(locationsRes);
+    } catch (err: any) {
+      setError(err.message || "Failed to load facilities");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-        setFacilities(facilitiesRes);
-        setLocations(locationsRes);
-      } catch (err: any) {
-        if (!isMounted) return;
-        setError(err.message || "Failed to load facilities");
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+  function openCreateModal() {
+    setFormData({
+      location_id: locations.length > 0 ? locations[0].id : "",
+      name: "",
+      type: "other",
+      status: "active",
+      capacity: undefined,
+      metadata: undefined,
+    });
+    setIsModalOpen(true);
+  }
+
+  function closeModal() {
+    setIsModalOpen(false);
+    setFormData({
+      location_id: "",
+      name: "",
+      type: "other",
+      status: "active",
+      capacity: undefined,
+      metadata: undefined,
+    });
+  }
+
+  async function handleSave() {
+    if (!formData.name.trim()) {
+      setError("Facility name is required");
+      return;
+    }
+    if (!formData.location_id) {
+      setError("Please select a location");
+      return;
     }
 
-    loadData();
+    setSaving(true);
+    setError(null);
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    try {
+      await createFacilityApi(formData);
+      await loadData();
+      closeModal();
+    } catch (err: any) {
+      setError(err.message || "Failed to create facility");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const locationById = useMemo(() => {
     const map = new Map<string, Location>();
@@ -108,7 +172,8 @@ export default function FacilitiesPage() {
   const stats = useMemo(() => {
     const total = facilities.length;
     const active = facilities.filter((f) => f.status === "active").length;
-    const maintenance = facilities.filter((f) => f.status === "maintenance").length;
+    const maintenance = facilities.filter((f) => f.status === "maintenance")
+      .length;
 
     return { total, active, maintenance };
   }, [facilities]);
@@ -122,19 +187,23 @@ export default function FacilitiesPage() {
             Facilities
           </h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Search and manage facilities across all locations
+            {isClient()
+              ? "Manage facilities at your locations"
+              : "Search and manage facilities across all locations"}
           </p>
         </div>
-        <Button>
-          <Filter className="mr-2 h-4 w-4" />
-          Advanced Filters
-        </Button>
+        {(isClient() || !user) && (
+          <Button onClick={openCreateModal}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Facility
+          </Button>
+        )}
       </div>
 
       {error && (
-        <p className="text-sm text-error" role="alert">
+        <div className="rounded-lg border border-red-500/40 bg-red-500/5 px-4 py-3 text-sm text-red-500">
           {error}
-        </p>
+        </div>
       )}
 
       {/* Stats */}
@@ -262,7 +331,7 @@ export default function FacilitiesPage() {
                     colSpan={5}
                     className="py-8 text-center text-sm text-text-secondary"
                   >
-                    Loading facilities...
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                   </TableCell>
                 </TableRow>
               )}
@@ -270,11 +339,7 @@ export default function FacilitiesPage() {
                 filteredFacilities.map((facility) => {
                   const location = locationById.get(facility.location_id);
                   const locationLabel = location
-                    ? [
-                        location.name,
-                        location.city,
-                        location.country,
-                      ]
+                    ? [location.name, location.city, location.country]
                         .filter(Boolean)
                         .join(", ")
                     : facility.location_id;
@@ -324,7 +389,112 @@ export default function FacilitiesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Create Facility Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        title="Add Facility"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-text-primary">
+              Location *
+            </label>
+            <select
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              value={formData.location_id}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  location_id: e.target.value,
+                }))
+              }
+              required
+            >
+              <option value="">Select a location</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name} - {location.city || location.address || ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Input
+            label="Facility Name *"
+            value={formData.name}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, name: e.target.value }))
+            }
+            placeholder="e.g. Gaming PC #1"
+          />
+          <div>
+            <label className="mb-2 block text-sm font-medium text-text-primary">
+              Type *
+            </label>
+            <select
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              value={formData.type}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, type: e.target.value }))
+              }
+            >
+              {Object.entries(FACILITY_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-text-primary">
+              Status *
+            </label>
+            <select
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              value={formData.status}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  status: e.target.value as FacilityStatus,
+                }))
+              }
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="maintenance">Maintenance</option>
+            </select>
+          </div>
+          <Input
+            label="Capacity"
+            type="number"
+            value={formData.capacity?.toString() || ""}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                capacity: e.target.value ? Number(e.target.value) : undefined,
+              }))
+            }
+            placeholder="e.g. 4"
+          />
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="secondary" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Add Facility"
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
-

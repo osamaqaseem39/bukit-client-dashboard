@@ -136,7 +136,7 @@ const navItems: NavItem[] = [
     label: "Analytics",
     href: "/dashboard/analytics",
     icon: <BarChart3 className="h-5 w-5" />,
-    roles: ["admin"],
+    roles: ["admin", "client"],
     moduleKey: "analytics",
   },
   {

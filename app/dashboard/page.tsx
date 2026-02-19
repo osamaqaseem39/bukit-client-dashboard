@@ -103,7 +103,9 @@ export default function DashboardPage() {
         return new Set<string>([
           "dashboard-overview",
           "bookings",
-          "gaming",
+          "locations",
+          "analytics",
+          "settings",
         ]);
       }
 
@@ -118,6 +120,7 @@ export default function DashboardPage() {
   const showAnalytics = modules.has("analytics");
   const showBookings = modules.has("bookings");
   const showGaming = modules.has("gaming");
+  const showLocations = modules.has("locations");
 
   const totalBookings = bookings.length;
   const gamingCount = gamingCenters.length;

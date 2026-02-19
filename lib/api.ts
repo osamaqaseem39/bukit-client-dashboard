@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
 
 const ACCESS_TOKEN_KEY = "token";
 const REFRESH_TOKEN_KEY = "refresh_token";
@@ -360,6 +360,10 @@ export async function getClientByIdApi(id: string) {
   return apiFetch<ClientDetail>(`/clients/${id}`);
 }
 
+export async function getClientByUserIdApi(userId: string) {
+  return apiFetch<ClientDetail>(`/clients/user/${userId}`);
+}
+
 export interface UpdateClientPayload {
   company_name?: string;
   legal_name?: string | null;
@@ -475,6 +479,19 @@ export async function createLocationApi(payload: LocationPayload) {
   return apiFetch<Location>("/locations", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLocationApi(id: string, payload: LocationPayload) {
+  return apiFetch<Location>(`/locations/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteLocationApi(id: string) {
+  return apiFetch<void>(`/locations/${id}`, {
+    method: "DELETE",
   });
 }
 
