@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard",
-  description: "Modern admin dashboard built with Next.js",
+  title: "Client Dashboard",
+  description: "Modern client dashboard built with Next.js",
 };
 
 export default function RootLayout({

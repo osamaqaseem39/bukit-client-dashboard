@@ -214,7 +214,7 @@ export default function Sidebar() {
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-16 items-center justify-between border-b border-border px-6">
-            <h1 className="text-xl font-bold text-primary">Admin</h1>
+            <h1 className="text-xl font-bold text-primary">Client Dashboard</h1>
             {user && (
               <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
                 {user.role}
@@ -266,7 +266,7 @@ export default function Sidebar() {
           {/* Footer */}
           <div className="border-t border-border p-4">
             <p className="text-xs text-text-secondary">
-              © 2026 Admin Dashboard
+              © 2026 Client Dashboard
             </p>
           </div>
         </div>

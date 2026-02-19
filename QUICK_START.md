@@ -18,7 +18,7 @@
 ## Project Structure Overview
 
 ```
-admin-next/
+client-dashboard/
 ├── app/
 │   └── dashboard/          # All dashboard pages
 │       ├── page.tsx        # Main dashboard (overview)
