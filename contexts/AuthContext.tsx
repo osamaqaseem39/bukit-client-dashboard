@@ -18,13 +18,17 @@ import {
   logoutApi,
 } from "@/lib/api";
 
-type UserRole = "admin" | "client" | "user";
+type UserRole = "super_admin" | "admin" | "client" | "user";
 
 interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  /**
+   * Optional client_id for users that belong to a client admin's domain.
+   */
+  client_id?: string | null;
   /**
    * Optional list of dashboard modules this user is allowed to see.
    *
@@ -40,6 +44,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
+  isSuperAdmin: () => boolean;
   isAdmin: () => boolean;
   isClient: () => boolean;
   isAuthenticated: boolean;
@@ -123,7 +128,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user]
   );
 
-  const isAdmin = useCallback(() => hasRole("admin"), [hasRole]);
+  const isSuperAdmin = useCallback(() => hasRole("super_admin"), [hasRole]);
+  const isAdmin = useCallback(() => hasRole(["super_admin", "admin"]), [hasRole]);
   const isClient = useCallback(() => hasRole("client"), [hasRole]);
 
   const value: AuthContextValue = {
@@ -132,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     hasRole,
+    isSuperAdmin,
     isAdmin,
     isClient,
     isAuthenticated: !!user,

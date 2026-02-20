@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Loader2, RefreshCw } from "lucide-react";
+import { CheckSquare, Loader2, RefreshCw, Plus, Pencil, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import {
   Table,
@@ -11,12 +11,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Modal from "@/components/ui/Modal";
 import {
   AdminUserSummary,
   DashboardModuleKey,
   getUsersApi,
   updateUserModulesApi,
+  createUserApi,
+  updateUserRoleApi,
+  CreateUserPayload,
+  UpdateUserRolePayload,
 } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ALL_MODULES: { key: DashboardModuleKey; label: string }[] = [
   { key: "dashboard-overview", label: "Dashboard overview" },
@@ -33,11 +41,31 @@ const ALL_MODULES: { key: DashboardModuleKey; label: string }[] = [
   { key: "settings", label: "Settings" },
 ];
 
+const ROLES: { value: "super_admin" | "admin" | "client" | "user"; label: string }[] = [
+  { value: "super_admin", label: "Super Admin" },
+  { value: "admin", label: "Admin" },
+  { value: "client", label: "Client Admin" },
+  { value: "user", label: "User" },
+];
+
 export default function UsersPage() {
+  const { user: currentUser, isSuperAdmin, isAdmin, isClient } = useAuth();
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminUserSummary | null>(null);
+  const [createForm, setCreateForm] = useState<CreateUserPayload>({
+    name: "",
+    email: "",
+    password: "",
+    role: "user",
+  });
+  const [editForm, setEditForm] = useState<UpdateUserRolePayload>({
+    role: undefined,
+    modules: null,
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -64,8 +92,20 @@ export default function UsersPage() {
   }, []);
 
   const totalUsers = users.length;
+  const superAdmins = users.filter((u) => u.role === "super_admin").length;
   const admins = users.filter((u) => u.role === "admin").length;
   const clients = users.filter((u) => u.role === "client").length;
+  const regularUsers = users.filter((u) => u.role === "user").length;
+
+  // Client admin can only create users, not admins
+  const canCreateUsers = isSuperAdmin() || isAdmin() || isClient();
+  const availableRoles = isSuperAdmin()
+    ? ROLES
+    : isAdmin()
+    ? ROLES.filter((r) => r.value !== "super_admin")
+    : isClient()
+    ? ROLES.filter((r) => r.value !== "super_admin" && r.value !== "admin")
+    : [];
 
   async function handleToggleModule(
     user: AdminUserSummary,
@@ -99,6 +139,59 @@ export default function UsersPage() {
     }
   }
 
+  async function handleCreateUser() {
+    if (!createForm.name || !createForm.email || !createForm.password) {
+      setError("Name, email, and password are required");
+      return;
+    }
+
+    setSavingUserId("new");
+    setError(null);
+
+    try {
+      const newUser = await createUserApi(createForm);
+      setUsers((prev) => [...prev, newUser]);
+      setIsCreateModalOpen(false);
+      setCreateForm({ name: "", email: "", password: "", role: "user" });
+    } catch (err: any) {
+      setError(err.message || "Failed to create user");
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
+  function openEditModal(user: AdminUserSummary) {
+    setEditingUser(user);
+    setEditForm({
+      role: user.role,
+      modules: user.modules || null,
+    });
+  }
+
+  function closeEditModal() {
+    setEditingUser(null);
+    setEditForm({ role: undefined, modules: null });
+  }
+
+  async function handleUpdateRole() {
+    if (!editingUser) return;
+
+    setSavingUserId(editingUser.id);
+    setError(null);
+
+    try {
+      const updated = await updateUserRoleApi(editingUser.id, editForm);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === editingUser.id ? updated : u))
+      );
+      closeEditModal();
+    } catch (err: any) {
+      setError(err.message || "Failed to update user");
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -106,24 +199,36 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-semibold text-text-primary">Users</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Manage users and configure which dashboard modules each user can access.
+            {isSuperAdmin()
+              ? "Manage all users and configure roles and permissions."
+              : isClient()
+              ? "Manage users in your domain and configure their permissions."
+              : "Manage users and configure which dashboard modules each user can access."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            // Simple manual refresh
-            window.location.reload();
-          }}
-          className="inline-flex items-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium text-text-primary hover:bg-surface-elevated/60 transition-colors"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          {canCreateUsers && (
+            <Button onClick={() => setIsCreateModalOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create User
+            </Button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              // Simple manual refresh
+              window.location.reload();
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-border-primary px-3 py-2 text-sm font-medium text-text-primary hover:bg-surface-elevated/60 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -138,6 +243,22 @@ export default function UsersPage() {
             </div>
           </CardContent>
         </Card>
+        {isSuperAdmin() && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-text-secondary">
+                    Super Admins
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-text-primary">
+                    {loading ? "—" : superAdmins}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -161,6 +282,20 @@ export default function UsersPage() {
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-text-primary">
                   {loading ? "—" : clients}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-text-secondary">
+                  Regular Users
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-text-primary">
+                  {loading ? "—" : regularUsers}
                 </p>
               </div>
             </div>
@@ -204,9 +339,11 @@ export default function UsersPage() {
                     <TableHead>User</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    {isSuperAdmin() && <TableHead>Domain</TableHead>}
                     <TableHead className="min-w-[360px]">
                       Modules
                     </TableHead>
+                    {canCreateUsers && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -223,9 +360,14 @@ export default function UsersPage() {
                         <TableCell>{user.email}</TableCell>
                         <TableCell className="capitalize">
                           <span className="inline-flex rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                            {user.role}
+                            {user.role.replace("_", " ")}
                           </span>
                         </TableCell>
+                        {isSuperAdmin() && (
+                          <TableCell className="text-sm text-text-secondary">
+                            {user.client_id ? "Client Domain" : "Platform"}
+                          </TableCell>
+                        )}
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
                             {ALL_MODULES.map((mod) => {
@@ -261,6 +403,18 @@ export default function UsersPage() {
                             })}
                           </div>
                         </TableCell>
+                        {canCreateUsers && (
+                          <TableCell>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => openEditModal(user)}
+                              disabled={savingUserId === user.id}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
@@ -270,6 +424,172 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Create User Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Create User"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Name *"
+            value={createForm.name}
+            onChange={(e) =>
+              setCreateForm((prev) => ({ ...prev, name: e.target.value }))
+            }
+            placeholder="John Doe"
+          />
+          <Input
+            label="Email *"
+            type="email"
+            value={createForm.email}
+            onChange={(e) =>
+              setCreateForm((prev) => ({ ...prev, email: e.target.value }))
+            }
+            placeholder="john@example.com"
+          />
+          <Input
+            label="Password *"
+            type="password"
+            value={createForm.password}
+            onChange={(e) =>
+              setCreateForm((prev) => ({ ...prev, password: e.target.value }))
+            }
+            placeholder="Minimum 6 characters"
+          />
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Role
+            </label>
+            <select
+              value={createForm.role}
+              onChange={(e) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  role: e.target.value as any,
+                }))
+              }
+              className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {availableRoles.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => setIsCreateModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateUser}
+              disabled={savingUserId === "new"}
+            >
+              {savingUserId === "new" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create User"
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        isOpen={!!editingUser}
+        onClose={closeEditModal}
+        title={`Edit User: ${editingUser?.name}`}
+        size="lg"
+      >
+        {editingUser && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Role
+              </label>
+              <select
+                value={editForm.role || editingUser.role}
+                onChange={(e) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    role: e.target.value as any,
+                  }))
+                }
+                className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {availableRoles.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Modules
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ALL_MODULES.map((mod) => {
+                  const checked =
+                    editForm.modules?.includes(mod.key) ?? false;
+                  return (
+                    <button
+                      key={mod.key}
+                      type="button"
+                      onClick={() => {
+                        const current = editForm.modules || [];
+                        const updated = checked
+                          ? current.filter((m) => m !== mod.key)
+                          : [...current, mod.key];
+                        setEditForm((prev) => ({
+                          ...prev,
+                          modules: updated.length > 0 ? updated : null,
+                        }));
+                      }}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors ${
+                        checked
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border-primary bg-surface-elevated/60 text-text-secondary hover:border-primary/60"
+                      }`}
+                    >
+                      <CheckSquare className="h-3 w-3" />
+                      {mod.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="secondary" onClick={closeEditModal}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateRole}
+                disabled={savingUserId === editingUser.id}
+              >
+                {savingUserId === editingUser.id ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

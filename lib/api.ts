@@ -178,7 +178,11 @@ export interface AuthUserProfile {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "client" | "user";
+  role: "super_admin" | "admin" | "client" | "user";
+  /**
+   * Optional client_id for users that belong to a client admin's domain.
+   */
+  client_id?: string | null;
   /**
    * Optional list of dashboard modules this user is allowed to see.
    *
@@ -197,7 +201,20 @@ export interface AdminUserSummary {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "client" | "user";
+  role: "super_admin" | "admin" | "client" | "user";
+  client_id?: string | null;
+  modules?: DashboardModuleKey[] | null;
+}
+
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  password: string;
+  role?: "super_admin" | "admin" | "client" | "user";
+}
+
+export interface UpdateUserRolePayload {
+  role?: "super_admin" | "admin" | "client" | "user";
   modules?: DashboardModuleKey[] | null;
 }
 
@@ -209,6 +226,13 @@ export async function getUserByIdApi(id: string) {
   return apiFetch<AdminUserSummary>(`/users/${id}`);
 }
 
+export async function createUserApi(payload: CreateUserPayload) {
+  return apiFetch<AdminUserSummary>("/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateUserModulesApi(
   id: string,
   modules: DashboardModuleKey[] | null
@@ -216,6 +240,23 @@ export async function updateUserModulesApi(
   return apiFetch<AdminUserSummary>(`/users/${id}/modules`, {
     method: "PATCH",
     body: JSON.stringify({ modules }),
+  });
+}
+
+export async function updateUserRoleApi(
+  id: string,
+  payload: UpdateUserRolePayload
+) {
+  return apiFetch<AdminUserSummary>(`/users/${id}/role`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateUserPasswordApi(id: string, password: string) {
+  return apiFetch<AdminUserSummary>(`/users/${id}/password`, {
+    method: "PATCH",
+    body: JSON.stringify({ password }),
   });
 }
 

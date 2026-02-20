@@ -9,7 +9,7 @@ export default function Layout({
   children: React.ReactNode;
 }) {
   return (
-    <ProtectedRoute allowedRoles={["admin", "client"]}>
+    <ProtectedRoute allowedRoles={["super_admin", "admin", "client"]}>
       <DashboardLayout>{children}</DashboardLayout>
     </ProtectedRoute>
   );

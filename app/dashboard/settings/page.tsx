@@ -4,17 +4,35 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { Save, Loader2 } from "lucide-react";
+import { Save, Loader2, Shield, Users, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 import {
   getClientByUserIdApi,
   updateClientApi,
   UpdateClientPayload,
   ClientDetail,
+  DashboardModuleKey,
 } from "@/lib/api";
 
+const ALL_MODULES: { key: DashboardModuleKey; label: string }[] = [
+  { key: "dashboard-overview", label: "Dashboard overview" },
+  { key: "gaming", label: "Gaming" },
+  { key: "snooker", label: "Snooker" },
+  { key: "table-tennis", label: "Table Tennis" },
+  { key: "cricket", label: "Cricket" },
+  { key: "futsal-turf", label: "Futsal Turf" },
+  { key: "padel", label: "Padel" },
+  { key: "locations", label: "Locations" },
+  { key: "users", label: "Users" },
+  { key: "bookings", label: "Bookings" },
+  { key: "analytics", label: "Analytics" },
+  { key: "settings", label: "Settings" },
+];
+
 export default function SettingsPage() {
-  const { user, isClient } = useAuth();
+  const { user, isClient, isSuperAdmin, isAdmin } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -356,6 +374,145 @@ export default function SettingsPage() {
           <p className="text-xs text-text-secondary">
             To change your account email or name, please contact support.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Roles & Permissions */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-medium text-text-primary flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Roles & Permissions
+              </h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                {isSuperAdmin()
+                  ? "You have full platform access as Super Admin"
+                  : isAdmin()
+                  ? "You have administrative access"
+                  : isClient()
+                  ? "You are a Client Admin managing your domain"
+                  : "Your current role and permissions"}
+              </p>
+            </div>
+            {(isSuperAdmin() || isAdmin() || isClient()) && (
+              <Button
+                variant="secondary"
+                onClick={() => router.push("/dashboard/users")}
+              >
+                Manage Users
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6">
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Your Role
+            </label>
+            <div className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+              {user?.role?.replace("_", " ").toUpperCase() || "USER"}
+            </div>
+            {user?.client_id && (
+              <p className="mt-2 text-xs text-text-secondary">
+                Domain: {user.client_id === user.id ? "Own Domain" : "Client Domain"}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Dashboard Modules Access
+            </label>
+            <p className="text-xs text-text-secondary mb-3">
+              {user?.modules && user.modules.length > 0
+                ? "You have custom module access configured:"
+                : "You are using role-based default modules:"}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {user?.modules && user.modules.length > 0
+                ? user.modules.map((moduleKey) => {
+                    const module = ALL_MODULES.find((m) => m.key === moduleKey);
+                    return module ? (
+                      <span
+                        key={moduleKey}
+                        className="inline-flex rounded-full border border-primary bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                      >
+                        {module.label}
+                      </span>
+                    ) : null;
+                  })
+                : ALL_MODULES.map((module) => {
+                    // Show default modules based on role
+                    const hasAccess =
+                      (isSuperAdmin() || isAdmin()) ||
+                      (isClient() &&
+                        ["dashboard-overview", "bookings", "gaming", "locations", "settings"].includes(
+                          module.key
+                        )) ||
+                      (!isSuperAdmin() &&
+                        !isAdmin() &&
+                        !isClient() &&
+                        module.key === "dashboard-overview");
+                    return hasAccess ? (
+                      <span
+                        key={module.key}
+                        className="inline-flex rounded-full border border-border-primary bg-surface-elevated/60 px-2 py-1 text-xs font-medium text-text-secondary"
+                      >
+                        {module.label}
+                      </span>
+                    ) : null;
+                  })}
+            </div>
+            {(isSuperAdmin() || isAdmin() || isClient()) && (
+              <p className="mt-3 text-xs text-text-secondary">
+                To modify user roles and permissions, visit the{" "}
+                <button
+                  onClick={() => router.push("/dashboard/users")}
+                  className="text-primary hover:underline"
+                >
+                  Users Management
+                </button>{" "}
+                page.
+              </p>
+            )}
+          </div>
+
+          {isSuperAdmin() && (
+            <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/5 p-4">
+              <div className="flex items-start gap-3">
+                <Shield className="h-5 w-5 text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">
+                    Super Admin Privileges
+                  </p>
+                  <p className="mt-1 text-xs text-yellow-700">
+                    You have full access to all platform features, users, and settings.
+                    You can manage all users, including other admins and super admins.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isClient() && (
+            <div className="rounded-lg border border-blue-500/40 bg-blue-500/5 p-4">
+              <div className="flex items-start gap-3">
+                <Users className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">
+                    Client Admin Privileges
+                  </p>
+                  <p className="mt-1 text-xs text-blue-700">
+                    You can manage users in your domain and configure their permissions.
+                    You cannot create admin users or access other client domains.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

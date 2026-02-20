@@ -122,7 +122,7 @@ const navItems: NavItem[] = [
     label: "Users",
     href: "/dashboard/users",
     icon: <Users className="h-5 w-5" />,
-    roles: ["admin"],
+    roles: ["super_admin", "admin", "client"],
     moduleKey: "users",
   },
   {
@@ -228,13 +228,17 @@ export default function Sidebar() {
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
 
-                // Role-based restriction (still enforced)
-                if (item.roles && user && !item.roles.includes(user.role)) {
+                // Super admin can see everything
+                const isSuperAdmin = user?.role === "super_admin";
+
+                // Role-based restriction (still enforced, except for super admin)
+                if (!isSuperAdmin && item.roles && user && !item.roles.includes(user.role)) {
                   return null;
                 }
 
-                // Module-based restriction (only when user has explicit modules)
+                // Module-based restriction (only when user has explicit modules, super admin bypasses)
                 if (
+                  !isSuperAdmin &&
                   effectiveModules &&
                   item.moduleKey &&
                   !effectiveModules.includes(item.moduleKey)
