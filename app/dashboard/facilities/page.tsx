@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { MapPin, Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -266,6 +267,11 @@ function formatStatus(status: FacilityStatus) {
 
 export default function FacilitiesPage() {
   const { isClient } = useAuth();
+  const searchParams = useSearchParams();
+
+  // For clients, backend infers client from authenticated user.
+  // For admins viewing a specific client, use clientId query param.
+  const clientId = isClient() ? undefined : searchParams.get("clientId") || undefined;
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(true);
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
@@ -288,12 +294,12 @@ export default function FacilitiesPage() {
     metadata: {},
   });
 
-  // Load locations on mount
+  // Load locations (scoped to current client or query clientId for admins)
   useEffect(() => {
     let isMounted = true;
     setLocationsLoading(true);
     setError(null);
-    getLocationsApi(undefined)
+    getLocationsApi(clientId)
       .then((data) => {
         if (isMounted) setLocations(data);
       })
@@ -306,7 +312,7 @@ export default function FacilitiesPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [clientId]);
 
   // When a location is selected, load its facilities
   useEffect(() => {

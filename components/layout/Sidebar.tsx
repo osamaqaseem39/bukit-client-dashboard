@@ -163,6 +163,24 @@ export default function Sidebar() {
     return user.modules.filter(Boolean) as DashboardModuleKey[];
   }, [user]);
 
+  const visibleNavItems = useMemo(() => {
+    if (!user) return navItems;
+
+    // For client dashboard users, only show core operational items.
+    if (user.role === "client") {
+      const allowedClientLabels = new Set([
+        "Bookings",
+        "Locations",
+        "Facilities",
+        "Settings",
+      ]);
+      return navItems.filter((item) => allowedClientLabels.has(item.label));
+    }
+
+    // For other roles (admin, super_admin, user) keep existing behavior.
+    return navItems;
+  }, [user]);
+
   useEffect(() => {
     const checkDesktop = () => {
       setIsDesktop(window.innerWidth >= 1024);
@@ -225,7 +243,7 @@ export default function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto px-4 py-6">
             <ul className="space-y-1">
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const isActive = pathname === item.href;
 
                 // Super admin can see everything
