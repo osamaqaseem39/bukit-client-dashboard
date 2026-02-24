@@ -30,6 +30,17 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 
+type DynamicFieldType = "text" | "textarea" | "number" | "select" | "checkbox";
+
+interface DynamicFieldConfig {
+  name: string;
+  label: string;
+  type: DynamicFieldType;
+  required?: boolean;
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+}
+
 const FACILITY_TYPE_LABELS: Record<string, string> = {
   "gaming-pc": "Gaming PC",
   vr: "VR",
@@ -42,6 +53,207 @@ const FACILITY_TYPE_LABELS: Record<string, string> = {
   "cricket-pitch": "Cricket Pitch",
   "padel-court": "Padel Court",
   other: "Other",
+};
+
+const FACILITY_DYNAMIC_FIELDS: Record<string, DynamicFieldConfig[]> = {
+  "gaming-pc": [
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+      required: true,
+      placeholder: "e.g. 25",
+    },
+    {
+      name: "specs",
+      label: "Specs / notes",
+      type: "textarea",
+      placeholder: "GPU, CPU, RAM or other details",
+    },
+    {
+      name: "is_private_room",
+      label: "Private room",
+      type: "checkbox",
+    },
+  ],
+  vr: [
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+      required: true,
+      placeholder: "e.g. 30",
+    },
+    {
+      name: "headset_type",
+      label: "Headset type",
+      type: "text",
+      placeholder: "e.g. Meta Quest, HTC Vive",
+    },
+  ],
+  ps4: [
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+      required: true,
+    },
+    {
+      name: "is_private_room",
+      label: "Private room",
+      type: "checkbox",
+    },
+  ],
+  ps5: [
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+      required: true,
+    },
+    {
+      name: "is_private_room",
+      label: "Private room",
+      type: "checkbox",
+    },
+  ],
+  xbox: [
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+      required: true,
+    },
+    {
+      name: "is_private_room",
+      label: "Private room",
+      type: "checkbox",
+    },
+  ],
+  "snooker-table": [
+    {
+      name: "table_size",
+      label: "Table size",
+      type: "select",
+      required: true,
+      options: [
+        { value: "6ft", label: "6 ft" },
+        { value: "7ft", label: "7 ft" },
+        { value: "8ft", label: "8 ft" },
+        { value: "9ft", label: "9 ft" },
+      ],
+    },
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+      required: true,
+    },
+    {
+      name: "table_count",
+      label: "Number of tables (if grouped)",
+      type: "number",
+    },
+  ],
+  "table-tennis-table": [
+    {
+      name: "table_count",
+      label: "Number of tables",
+      type: "number",
+      required: true,
+    },
+    {
+      name: "indoor_outdoor",
+      label: "Indoor / outdoor",
+      type: "select",
+      options: [
+        { value: "indoor", label: "Indoor" },
+        { value: "outdoor", label: "Outdoor" },
+      ],
+    },
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+    },
+  ],
+  "futsal-field": [
+    {
+      name: "surface_type",
+      label: "Surface type",
+      type: "select",
+      options: [
+        { value: "turf", label: "Turf" },
+        { value: "grass", label: "Grass" },
+        { value: "indoor", label: "Indoor court" },
+      ],
+    },
+    {
+      name: "is_covered",
+      label: "Covered field",
+      type: "checkbox",
+    },
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+    },
+  ],
+  "cricket-pitch": [
+    {
+      name: "pitch_type",
+      label: "Pitch type",
+      type: "select",
+      options: [
+        { value: "indoor", label: "Indoor" },
+        { value: "outdoor", label: "Outdoor" },
+        { value: "turf", label: "Turf" },
+        { value: "cement", label: "Cement" },
+      ],
+    },
+    {
+      name: "session_duration_minutes",
+      label: "Default session duration (minutes)",
+      type: "number",
+    },
+    {
+      name: "floodlights",
+      label: "Floodlights available",
+      type: "checkbox",
+    },
+  ],
+  "padel-court": [
+    {
+      name: "court_count",
+      label: "Number of courts",
+      type: "number",
+      required: true,
+    },
+    {
+      name: "is_indoor",
+      label: "Indoor courts",
+      type: "checkbox",
+    },
+    {
+      name: "hourly_rate",
+      label: "Hourly rate",
+      type: "number",
+    },
+  ],
+  other: [
+    {
+      name: "description",
+      label: "Description",
+      type: "textarea",
+      placeholder: "Short description of this facility",
+    },
+    {
+      name: "notes",
+      label: "Internal notes",
+      type: "textarea",
+      placeholder: "Any internal notes for staff",
+    },
+  ],
 };
 
 function formatFacilityType(type: string) {
@@ -73,7 +285,7 @@ export default function FacilitiesPage() {
     type: "other",
     status: "active",
     capacity: undefined,
-    metadata: undefined,
+    metadata: {},
   });
 
   // Load locations on mount
@@ -132,7 +344,7 @@ export default function FacilitiesPage() {
       type: "other",
       status: "active",
       capacity: undefined,
-      metadata: undefined,
+      metadata: {},
     });
     setIsModalOpen(true);
   }
@@ -144,7 +356,7 @@ export default function FacilitiesPage() {
       type: facility.type,
       status: facility.status,
       capacity: facility.capacity ?? undefined,
-      metadata: facility.metadata ?? undefined,
+      metadata: facility.metadata ?? {},
     });
     setIsModalOpen(true);
   }
@@ -157,7 +369,44 @@ export default function FacilitiesPage() {
       type: "other",
       status: "active",
       capacity: undefined,
-      metadata: undefined,
+      metadata: {},
+    });
+  }
+
+  function getDynamicFieldsForType(type: string): DynamicFieldConfig[] {
+    return FACILITY_DYNAMIC_FIELDS[type] ?? FACILITY_DYNAMIC_FIELDS.other ?? [];
+  }
+
+  function handleMetadataChange(field: DynamicFieldConfig, rawValue: any) {
+    setFormData((prev) => {
+      const current = prev.metadata ?? {};
+      let value: any = rawValue;
+
+      if (field.type === "number") {
+        const num = rawValue === "" ? NaN : Number(rawValue);
+        value = Number.isNaN(num) ? undefined : num;
+      } else if (field.type === "checkbox") {
+        value = !!rawValue;
+      } else {
+        value = rawValue;
+      }
+
+      const next = { ...current };
+
+      if (
+        value === undefined ||
+        value === "" ||
+        (typeof value === "number" && Number.isNaN(value))
+      ) {
+        delete next[field.name];
+      } else {
+        next[field.name] = value;
+      }
+
+      return {
+        ...prev,
+        metadata: Object.keys(next).length ? next : {},
+      };
     });
   }
 
@@ -507,6 +756,91 @@ export default function FacilitiesPage() {
             }
             placeholder="e.g. 4"
           />
+          <div className="space-y-3 rounded-lg border border-border/60 bg-muted/40 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+              Configuration for {formatFacilityType(formData.type)}
+            </p>
+            {getDynamicFieldsForType(formData.type).length === 0 && (
+              <p className="text-xs text-text-secondary">
+                No extra configuration for this type. You can still use capacity above.
+              </p>
+            )}
+            {getDynamicFieldsForType(formData.type).map((field) => {
+              const metadata = formData.metadata ?? {};
+              const value = metadata[field.name];
+
+              if (field.type === "checkbox") {
+                return (
+                  <label
+                    key={field.name}
+                    className="flex items-center gap-2 text-sm text-text-primary"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40"
+                      checked={!!value}
+                      onChange={(e) => handleMetadataChange(field, e.target.checked)}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                );
+              }
+
+              if (field.type === "select" && field.options) {
+                return (
+                  <div key={field.name}>
+                    <label className="mb-1 block text-xs font-medium text-text-secondary">
+                      {field.label}
+                      {field.required && <span className="ml-1 text-red-500">*</span>}
+                    </label>
+                    <select
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      value={value ?? ""}
+                      onChange={(e) => handleMetadataChange(field, e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      {field.options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+
+              if (field.type === "textarea") {
+                return (
+                  <div key={field.name}>
+                    <label className="mb-1 block text-xs font-medium text-text-secondary">
+                      {field.label}
+                    </label>
+                    <textarea
+                      className="min-h-[80px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      placeholder={field.placeholder}
+                      value={value ?? ""}
+                      onChange={(e) => handleMetadataChange(field, e.target.value)}
+                    />
+                  </div>
+                );
+              }
+
+              return (
+                <Input
+                  key={field.name}
+                  label={field.label}
+                  type={field.type === "number" ? "number" : "text"}
+                  value={
+                    field.type === "number" && typeof value === "number"
+                      ? value.toString()
+                      : value ?? ""
+                  }
+                  placeholder={field.placeholder}
+                  onChange={(e) => handleMetadataChange(field, e.target.value)}
+                />
+              );
+            })}
+          </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="secondary" onClick={closeModal}>
               Cancel
