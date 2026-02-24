@@ -124,6 +124,7 @@ export async function apiFetch<T>(
 export interface LoginResponse {
   access_token: string;
   refresh_token?: string;
+  requires_password_change?: boolean;
 }
 
 export async function loginApi(email: string, password: string) {
@@ -190,10 +191,19 @@ export interface AuthUserProfile {
    * visibility rules.
    */
   modules?: DashboardModuleKey[] | null;
+  /** When true, user must change password before using the dashboard. */
+  requires_password_change?: boolean;
 }
 
 export async function getProfileApi() {
   return apiFetch<AuthUserProfile>("/auth/profile");
+}
+
+export async function changePasswordApi(current_password: string, new_password: string) {
+  return apiFetch<{ success: boolean }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ current_password, new_password }),
+  });
 }
 
 // Users (admin)
@@ -538,9 +548,8 @@ export async function deleteLocationApi(id: string) {
 
 export type FacilityStatus = "active" | "inactive" | "maintenance";
 
-export interface FacilityPayload {
-  id?: string;
-  location_id: string;
+/** Payload for creating a facility at a location (location is in the URL). */
+export interface CreateFacilityPayload {
   name: string;
   type: string;
   status: FacilityStatus;
@@ -548,14 +557,13 @@ export interface FacilityPayload {
   metadata?: Record<string, any>;
 }
 
-export async function createFacilityApi(payload: FacilityPayload) {
-  return apiFetch<any>("/facilities", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+/** Payload for create when using legacy flat API (prefer location-scoped). */
+export interface FacilityPayload extends CreateFacilityPayload {
+  id?: string;
+  location_id: string;
 }
 
-// Facilities
+// Facilities (location-scoped: backend uses /locations/:locationId/facilities)
 export interface Facility {
   id: string;
   location_id: string;
@@ -568,23 +576,42 @@ export interface Facility {
   updated_at?: string;
 }
 
-export interface GetFacilitiesParams {
-  search?: string;
-  type?: string;
-  location_id?: string;
+export async function getFacilitiesByLocationApi(locationId: string) {
+  return apiFetch<Facility[]>(`/locations/${locationId}/facilities`);
 }
 
-export async function getFacilitiesApi(params: GetFacilitiesParams = {}) {
-  const query = new URLSearchParams();
+export async function createFacilityAtLocationApi(
+  locationId: string,
+  payload: CreateFacilityPayload
+) {
+  return apiFetch<Facility>(`/locations/${locationId}/facilities`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
 
-  if (params.search) query.set("search", params.search);
-  if (params.type) query.set("type", params.type);
-  if (params.location_id) query.set("location_id", params.location_id);
+export async function updateFacilityAtLocationApi(
+  locationId: string,
+  facilityId: string,
+  payload: Partial<CreateFacilityPayload>
+) {
+  return apiFetch<Facility>(
+    `/locations/${locationId}/facilities/${facilityId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
 
-  const qs = query.toString();
-  const path = qs ? `/facilities?${qs}` : "/facilities";
-
-  return apiFetch<Facility[]>(path);
+export async function deleteFacilityAtLocationApi(
+  locationId: string,
+  facilityId: string
+) {
+  return apiFetch<void>(
+    `/locations/${locationId}/facilities/${facilityId}`,
+    { method: "DELETE" }
+  );
 }
 
 

@@ -19,9 +19,13 @@ function LoginPageInner() {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      const result = await login(email, password);
       const next = searchParams.get("next") || "/dashboard";
-      router.replace(next);
+      if (result.requires_password_change) {
+        router.replace("/change-password");
+      } else {
+        router.replace(next);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {

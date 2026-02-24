@@ -7,7 +7,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import {
   createClientWithUserApi,
-  createFacilityApi,
+  createFacilityAtLocationApi,
   createLocationApi,
   FacilityPayload,
   LocationPayload,
@@ -429,7 +429,14 @@ export default function ClientOnboardingPage() {
     setIsSubmitting(true);
     try {
       for (const fac of facilities) {
-        await createFacilityApi(fac);
+        if (!fac.location_id) continue;
+        await createFacilityAtLocationApi(fac.location_id, {
+          name: fac.name,
+          type: fac.type,
+          status: fac.status,
+          capacity: fac.capacity,
+          metadata: fac.metadata,
+        });
       }
 
       // On success, redirect to dashboard or clients list

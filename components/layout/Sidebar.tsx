@@ -33,7 +33,7 @@ interface NavItem {
    * Optional roles that are allowed to see this item.
    * If omitted, the item is available to all roles (subject to modules).
    */
-  roles?: Array<"admin" | "client" | "user">;
+  roles?: Array<"super_admin" | "admin" | "client" | "user">;
   /**
    * Optional dashboard module key required for this item.
    * If provided and the logged-in user has a non-empty modules list,

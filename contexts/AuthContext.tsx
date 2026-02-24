@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import {
   getProfileApi,
   loginApi,
+  changePasswordApi,
   DashboardModuleKey,
   getAccessToken,
   setAuthTokens,
@@ -36,12 +37,15 @@ interface User {
    * primarily by this list instead of static role checks.
    */
   modules?: DashboardModuleKey[] | null;
+  /** When true, user must change password before using the dashboard. */
+  requires_password_change?: boolean;
 }
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ requires_password_change?: boolean }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   isSuperAdmin: () => boolean;
@@ -103,7 +107,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     }
     await loadUser();
-    router.replace("/dashboard");
+    return { requires_password_change: data.requires_password_change };
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    await changePasswordApi(currentPassword, newPassword);
+    await loadUser();
   };
 
   const logout = useCallback(() => {
@@ -136,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     login,
+    changePassword,
     logout,
     hasRole,
     isSuperAdmin,

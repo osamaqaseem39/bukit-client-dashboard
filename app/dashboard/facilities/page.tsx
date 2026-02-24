@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Filter, MapPin, Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { MapPin, Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -17,14 +17,15 @@ import {
 import type {
   Facility,
   FacilityStatus,
-  GetFacilitiesParams,
   Location,
-  FacilityPayload,
+  CreateFacilityPayload,
 } from "@/lib/api";
 import {
-  getFacilitiesApi,
+  getFacilitiesByLocationApi,
   getLocationsApi,
-  createFacilityApi,
+  createFacilityAtLocationApi,
+  updateFacilityAtLocationApi,
+  deleteFacilityAtLocationApi,
 } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
@@ -52,20 +53,22 @@ function formatStatus(status: FacilityStatus) {
 }
 
 export default function FacilitiesPage() {
-  const { user, isClient } = useAuth();
-  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const { isClient } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [facilitiesLoading, setFacilitiesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<string>("");
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("");
 
-  const [formData, setFormData] = useState<FacilityPayload>({
-    location_id: "",
+  const [formData, setFormData] = useState<CreateFacilityPayload>({
     name: "",
     type: "other",
     status: "active",
@@ -73,34 +76,58 @@ export default function FacilitiesPage() {
     metadata: undefined,
   });
 
+  // Load locations on mount
   useEffect(() => {
-    loadData();
+    let isMounted = true;
+    setLocationsLoading(true);
+    setError(null);
+    getLocationsApi(undefined)
+      .then((data) => {
+        if (isMounted) setLocations(data);
+      })
+      .catch((err: any) => {
+        if (isMounted) setError(err.message || "Failed to load locations");
+      })
+      .finally(() => {
+        if (isMounted) setLocationsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  async function loadData() {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // For clients, don't pass clientId - backend will filter by authenticated user
-      const clientId = isClient() ? undefined : undefined;
-      const [facilitiesRes, locationsRes] = await Promise.all([
-        getFacilitiesApi({} as GetFacilitiesParams),
-        getLocationsApi(clientId),
-      ]);
-
-      setFacilities(facilitiesRes);
-      setLocations(locationsRes);
-    } catch (err: any) {
-      setError(err.message || "Failed to load facilities");
-    } finally {
-      setLoading(false);
+  // When a location is selected, load its facilities
+  useEffect(() => {
+    if (!selectedLocationId) {
+      setFacilities([]);
+      return;
     }
-  }
+    let isMounted = true;
+    setFacilitiesLoading(true);
+    setError(null);
+    getFacilitiesByLocationApi(selectedLocationId)
+      .then((data) => {
+        if (isMounted) setFacilities(data);
+      })
+      .catch((err: any) => {
+        if (isMounted) setError(err.message || "Failed to load facilities");
+      })
+      .finally(() => {
+        if (isMounted) setFacilitiesLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedLocationId]);
+
+  const selectedLocation = useMemo(
+    () => locations.find((l) => l.id === selectedLocationId) ?? null,
+    [locations, selectedLocationId]
+  );
 
   function openCreateModal() {
+    setEditingFacility(null);
     setFormData({
-      location_id: locations.length > 0 ? locations[0].id : "",
       name: "",
       type: "other",
       status: "active",
@@ -110,10 +137,22 @@ export default function FacilitiesPage() {
     setIsModalOpen(true);
   }
 
+  function openEditModal(facility: Facility) {
+    setEditingFacility(facility);
+    setFormData({
+      name: facility.name,
+      type: facility.type,
+      status: facility.status,
+      capacity: facility.capacity ?? undefined,
+      metadata: facility.metadata ?? undefined,
+    });
+    setIsModalOpen(true);
+  }
+
   function closeModal() {
     setIsModalOpen(false);
+    setEditingFacility(null);
     setFormData({
-      location_id: "",
       name: "",
       type: "other",
       status: "active",
@@ -123,81 +162,75 @@ export default function FacilitiesPage() {
   }
 
   async function handleSave() {
+    if (!selectedLocationId) return;
     if (!formData.name.trim()) {
       setError("Facility name is required");
       return;
     }
-    if (!formData.location_id) {
-      setError("Please select a location");
-      return;
-    }
-
     setSaving(true);
     setError(null);
-
     try {
-      await createFacilityApi(formData);
-      await loadData();
+      if (editingFacility) {
+        await updateFacilityAtLocationApi(
+          selectedLocationId,
+          editingFacility.id,
+          formData
+        );
+      } else {
+        await createFacilityAtLocationApi(selectedLocationId, formData);
+      }
+      const data = await getFacilitiesByLocationApi(selectedLocationId);
+      setFacilities(data);
       closeModal();
     } catch (err: any) {
-      setError(err.message || "Failed to create facility");
+      setError(err.message || (editingFacility ? "Failed to update facility" : "Failed to create facility"));
     } finally {
       setSaving(false);
     }
   }
 
-  const locationById = useMemo(() => {
-    const map = new Map<string, Location>();
-    locations.forEach((loc) => {
-      map.set(loc.id, loc);
-    });
-    return map;
-  }, [locations]);
+  async function handleDelete(facility: Facility) {
+    if (!selectedLocationId) return;
+    if (!confirm(`Delete "${facility.name}"? This cannot be undone.`)) return;
+    setDeletingId(facility.id);
+    setError(null);
+    try {
+      await deleteFacilityAtLocationApi(selectedLocationId, facility.id);
+      const data = await getFacilitiesByLocationApi(selectedLocationId);
+      setFacilities(data);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete facility");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const filteredFacilities = useMemo(() => {
     return facilities.filter((facility) => {
       const matchesSearch =
         !searchQuery ||
         facility.name.toLowerCase().includes(searchQuery.toLowerCase());
-
       const matchesType = !selectedType || facility.type === selectedType;
-
-      const matchesLocation =
-        !selectedLocationId || facility.location_id === selectedLocationId;
-
-      return matchesSearch && matchesType && matchesLocation;
+      return matchesSearch && matchesType;
     });
-  }, [facilities, searchQuery, selectedType, selectedLocationId]);
+  }, [facilities, searchQuery, selectedType]);
 
   const stats = useMemo(() => {
     const total = facilities.length;
     const active = facilities.filter((f) => f.status === "active").length;
-    const maintenance = facilities.filter((f) => f.status === "maintenance")
-      .length;
-
+    const maintenance = facilities.filter((f) => f.status === "maintenance").length;
     return { total, active, maintenance };
   }, [facilities]);
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">
-            Facilities
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            {isClient()
-              ? "Manage facilities at your locations"
-              : "Search and manage facilities across all locations"}
-          </p>
-        </div>
-        {(isClient() || !user) && (
-          <Button onClick={openCreateModal}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Facility
-          </Button>
-        )}
+      <div>
+        <h1 className="text-2xl font-semibold text-text-primary">
+          Facilities
+        </h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          Add facilities per location (gaming, futsal, padel, etc.). They will appear in the app and can be booked.
+        </p>
       </div>
 
       {error && (
@@ -206,239 +239,237 @@ export default function FacilitiesPage() {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-text-secondary">
-                  Total Facilities
-                </p>
-                <p className="mt-2 text-2xl font-semibold text-text-primary">
-                  {stats.total}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-text-secondary">
-                  Active
-                </p>
-                <p className="mt-2 text-2xl font-semibold text-text-primary">
-                  {stats.active}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-text-secondary">
-                  In Maintenance
-                </p>
-                <p className="mt-2 text-2xl font-semibold text-text-primary">
-                  {stats.maintenance}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search & Filters */}
-      <Card>
-        <CardContent className="pt-6 space-y-4">
-          <div className="flex flex-col gap-4 md:flex-row">
-            <Input
-              type="search"
-              placeholder="Search facilities by name..."
-              icon={<Search className="h-4 w-4" />}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1"
-            />
-
-            <div className="flex flex-1 flex-col gap-4 md:flex-row">
-              <div className="flex-1">
-                <label className="mb-1 block text-xs font-medium text-text-secondary">
-                  Type
-                </label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                >
-                  <option value="">All types</option>
-                  {Object.entries(FACILITY_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex-1">
-                <label className="mb-1 block text-xs font-medium text-text-secondary">
-                  Location
-                </label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  value={selectedLocationId}
-                  onChange={(e) => setSelectedLocationId(e.target.value)}
-                >
-                  <option value="">All locations</option>
-                  {locations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Facilities Table */}
+      {/* Location selector (required first step) */}
       <Card>
         <CardHeader>
           <h2 className="text-lg font-medium text-text-primary">
-            All Facilities
+            Select location
           </h2>
+          <p className="text-sm text-text-secondary">
+            Choose a location to view and add facilities. Facilities at this location will be available in the app for bookings.
+          </p>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Capacity</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && filteredFacilities.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-8 text-center text-sm text-text-secondary"
-                  >
-                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                  </TableCell>
-                </TableRow>
-              )}
-              {!loading &&
-                filteredFacilities.map((facility) => {
-                  const location = locationById.get(facility.location_id);
-                  const locationLabel = location
-                    ? [location.name, location.city, location.country]
-                        .filter(Boolean)
-                        .join(", ")
-                    : facility.location_id;
-
-                  return (
-                    <TableRow key={facility.id}>
-                      <TableCell className="font-medium">
-                        {facility.name}
-                      </TableCell>
-                      <TableCell>{formatFacilityType(facility.type)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-text-secondary" />
-                          <span>{locationLabel}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                            facility.status === "active"
-                              ? "bg-success/10 text-success"
-                              : facility.status === "maintenance"
-                              ? "bg-warning/10 text-warning"
-                              : "bg-border text-text-secondary"
-                          }`}
-                        >
-                          {formatStatus(facility.status)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {facility.capacity != null ? facility.capacity : "-"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              {!loading && filteredFacilities.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-8 text-center text-sm text-text-secondary"
-                  >
-                    No facilities found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-text-secondary">
+                Location
+              </label>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                value={selectedLocationId}
+                onChange={(e) => setSelectedLocationId(e.target.value)}
+                disabled={locationsLoading}
+              >
+                <option value="">
+                  {locationsLoading ? "Loading…" : "Select a location"}
+                </option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                    {loc.city || loc.address ? ` — ${loc.city || loc.address}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedLocationId && (
+              <Button onClick={openCreateModal}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add facility
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Create Facility Modal */}
+      {!selectedLocationId && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <MapPin className="mx-auto h-12 w-12 text-text-secondary/60" />
+            <p className="mt-3 text-sm font-medium text-text-primary">
+              Select a location above
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">
+              Then you can add and manage facilities (gaming, futsal, padel, etc.) for that location. They will be available in the app for bookings.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {selectedLocationId && (
+        <>
+          {/* Stats for this location */}
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm font-medium text-text-secondary">Total</p>
+                <p className="mt-2 text-2xl font-semibold text-text-primary">
+                  {stats.total}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm font-medium text-text-secondary">Active</p>
+                <p className="mt-2 text-2xl font-semibold text-text-primary">
+                  {stats.active}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm font-medium text-text-secondary">Maintenance</p>
+                <p className="mt-2 text-2xl font-semibold text-text-primary">
+                  {stats.maintenance}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Search & type filter */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Input
+                  type="search"
+                  placeholder="Search by name..."
+                  icon={<Search className="h-4 w-4" />}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1"
+                />
+                <div className="w-full sm:w-48">
+                  <label className="mb-1 block text-xs font-medium text-text-secondary">
+                    Type
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                  >
+                    <option value="">All types</option>
+                    {Object.entries(FACILITY_TYPE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Facilities table for this location */}
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-medium text-text-primary">
+                {selectedLocation ? `Facilities at ${selectedLocation.name}` : "Facilities"}
+              </h2>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Capacity</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {facilitiesLoading && filteredFacilities.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center text-sm text-text-secondary">
+                        <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!facilitiesLoading &&
+                    filteredFacilities.map((facility) => (
+                      <TableRow key={facility.id}>
+                        <TableCell className="font-medium">{facility.name}</TableCell>
+                        <TableCell>{formatFacilityType(facility.type)}</TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                              facility.status === "active"
+                                ? "bg-success/10 text-success"
+                                : facility.status === "maintenance"
+                                ? "bg-warning/10 text-warning"
+                                : "bg-border text-text-secondary"
+                            }`}
+                          >
+                            {formatStatus(facility.status)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {facility.capacity != null ? facility.capacity : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditModal(facility)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(facility)}
+                              disabled={deletingId === facility.id}
+                            >
+                              {deletingId === facility.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {!facilitiesLoading && filteredFacilities.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center text-sm text-text-secondary">
+                        No facilities yet. Add one with the button above.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Create / Edit Facility Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={closeModal}
-        title="Add Facility"
+        title={editingFacility ? "Edit facility" : "Add facility"}
         size="lg"
       >
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-text-primary">
-              Location *
-            </label>
-            <select
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              value={formData.location_id}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  location_id: e.target.value,
-                }))
-              }
-              required
-            >
-              <option value="">Select a location</option>
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name} - {location.city || location.address || ""}
-                </option>
-              ))}
-            </select>
-          </div>
+          {selectedLocation && (
+            <p className="text-sm text-text-secondary">
+              Location: <span className="font-medium text-text-primary">{selectedLocation.name}</span>
+            </p>
+          )}
           <Input
-            label="Facility Name *"
+            label="Facility name *"
             value={formData.name}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, name: e.target.value }))
-            }
-            placeholder="e.g. Gaming PC #1"
+            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            placeholder="e.g. Gaming PC #1, Futsal Court A"
           />
           <div>
-            <label className="mb-2 block text-sm font-medium text-text-primary">
-              Type *
-            </label>
+            <label className="mb-2 block text-sm font-medium text-text-primary">Type *</label>
             <select
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               value={formData.type}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, type: e.target.value }))
-              }
+              onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))}
             >
               {Object.entries(FACILITY_TYPE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -448,9 +479,7 @@ export default function FacilitiesPage() {
             </select>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-text-primary">
-              Status *
-            </label>
+            <label className="mb-2 block text-sm font-medium text-text-primary">Status *</label>
             <select
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               value={formData.status}
@@ -469,7 +498,7 @@ export default function FacilitiesPage() {
           <Input
             label="Capacity"
             type="number"
-            value={formData.capacity?.toString() || ""}
+            value={formData.capacity?.toString() ?? ""}
             onChange={(e) =>
               setFormData((prev) => ({
                 ...prev,
@@ -486,10 +515,12 @@ export default function FacilitiesPage() {
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  Saving…
                 </>
+              ) : editingFacility ? (
+                "Save"
               ) : (
-                "Add Facility"
+                "Add facility"
               )}
             </Button>
           </div>

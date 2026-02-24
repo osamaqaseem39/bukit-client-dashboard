@@ -21,6 +21,8 @@ export default function ProtectedRoute({
     if (!loading) {
       if (!isAuthenticated) {
         router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      } else if (user?.requires_password_change && pathname !== "/change-password") {
+        router.replace("/change-password");
       } else if (allowedRoles && user && !hasRole(allowedRoles)) {
         // Only redirect if user exists and doesn't have the required role
         router.replace("/dashboard");
