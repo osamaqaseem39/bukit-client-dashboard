@@ -6,7 +6,6 @@ import { MapPin, Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import Modal from "@/components/ui/Modal";
 import {
   Table,
   TableBody,
@@ -706,6 +705,263 @@ export default function FacilitiesPage() {
     return { total, active, maintenance };
   }, [facilities]);
 
+  if (isModalOpen) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">
+            {editingFacility ? "Edit facility" : "Add facility"}
+          </h1>
+          {selectedLocation && (
+            <p className="mt-1 text-sm text-text-secondary">
+              Location:{" "}
+              <span className="font-medium text-text-primary">
+                {selectedLocation.name}
+              </span>
+            </p>
+          )}
+        </div>
+
+        <Card>
+          <CardContent className="space-y-4 pt-6">
+            <Input
+              label="Facility name *"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, name: e.target.value }))
+              }
+              placeholder="e.g. Gaming PC #1, Futsal Court A"
+            />
+            <div>
+              <label className="mb-2 block text-sm font-medium text-text-primary">
+                Facility type *
+              </label>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                value={formGroup}
+                onChange={(e) => {
+                  const newGroup = e.target.value as FacilityGroup | "";
+                  setFormGroup(newGroup);
+                  setFormData((prev) => {
+                    if (!newGroup) {
+                      return prev;
+                    }
+                    const allowed = getAllowedTypesForGroup(newGroup);
+                    const nextType = allowed.includes(prev.type)
+                      ? prev.type
+                      : allowed[0] ?? "other";
+                    return {
+                      ...prev,
+                      type: nextType,
+                    };
+                  });
+                }}
+              >
+                <option value="">Select facility type…</option>
+                {Object.entries(FACILITY_GROUP_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-text-primary">
+                Facility *
+              </label>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                value={formData.type}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    type: e.target.value,
+                  }))
+                }
+              >
+                {getAllowedTypesForGroup(formGroup).map((value) => (
+                  <option key={value} value={value}>
+                    {FACILITY_TYPE_LABELS[value] || value}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-text-primary">
+                Status *
+              </label>
+              <select
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                value={formData.status}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    status: e.target.value as FacilityStatus,
+                  }))
+                }
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="maintenance">Maintenance</option>
+              </select>
+            </div>
+            <Input
+              label="Capacity"
+              type="number"
+              value={formData.capacity?.toString() ?? ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  capacity: e.target.value ? Number(e.target.value) : undefined,
+                }))
+              }
+              placeholder="e.g. 4"
+            />
+            <div className="space-y-3 rounded-lg border border-border/60 bg-muted/40 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+                Configuration for {formatFacilityType(formData.type)}
+              </p>
+              {getDynamicFieldsForType(formData.type).length === 0 && (
+                <p className="text-xs text-text-secondary">
+                  No extra configuration for this type. You can still use
+                  capacity above.
+                </p>
+              )}
+              {getDynamicFieldsForType(formData.type).map((field) => {
+                const metadata = formData.metadata ?? {};
+                const value = metadata[field.name];
+
+                if (field.type === "checkbox") {
+                  return (
+                    <label
+                      key={field.name}
+                      className="flex items-center gap-2 text-sm text-text-primary"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40"
+                        checked={!!value}
+                        onChange={(e) =>
+                          handleMetadataChange(field, e.target.checked)
+                        }
+                      />
+                      <span>{field.label}</span>
+                    </label>
+                  );
+                }
+
+                if (field.type === "select" && field.options) {
+                  return (
+                    <div key={field.name}>
+                      <label className="mb-1 block text-xs font-medium text-text-secondary">
+                        {field.label}
+                        {field.required && (
+                          <span className="ml-1 text-red-500">*</span>
+                        )}
+                      </label>
+                      <select
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        value={value ?? ""}
+                        onChange={(e) =>
+                          handleMetadataChange(field, e.target.value)
+                        }
+                      >
+                        <option value="">Select…</option>
+                        {field.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+
+                if (field.type === "textarea") {
+                  return (
+                    <div key={field.name}>
+                      <label className="mb-1 block text-xs font-medium text-text-secondary">
+                        {field.label}
+                      </label>
+                      <textarea
+                        className="min-h-[80px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        placeholder={field.placeholder}
+                        value={value ?? ""}
+                        onChange={(e) =>
+                          handleMetadataChange(field, e.target.value)
+                        }
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <Input
+                    key={field.name}
+                    label={field.label}
+                    type={field.type === "number" ? "number" : "text"}
+                    value={
+                      field.type === "number" && typeof value === "number"
+                        ? value.toString()
+                        : value ?? ""
+                    }
+                    placeholder={field.placeholder}
+                    onChange={(e) =>
+                      handleMetadataChange(field, e.target.value)
+                    }
+                  />
+                );
+              })}
+            </div>
+            {isGamingType(formData.type) && (
+              <GamingPackagesEditor
+                packages={getGamingPackagesFromMetadata(
+                  (formData.metadata as Record<string, any> | null | undefined) ??
+                    {}
+                )}
+                onChange={(nextPackages) =>
+                  setFormData((prev) => {
+                    const baseMetadata: Record<string, any> = {
+                      ...(prev.metadata ?? {}),
+                    };
+                    if (!nextPackages.length) {
+                      delete (baseMetadata as any).packages;
+                    } else {
+                      (baseMetadata as any).packages = nextPackages;
+                    }
+                    return {
+                      ...prev,
+                      metadata: Object.keys(baseMetadata).length
+                        ? baseMetadata
+                        : {},
+                    };
+                  })
+                }
+              />
+            )}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="secondary" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : editingFacility ? (
+                  "Save"
+                ) : (
+                  "Add facility"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -928,234 +1184,6 @@ export default function FacilitiesPage() {
           </Card>
         </>
       )}
-
-      {/* Create / Edit Facility Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={closeModal}
-        title={editingFacility ? "Edit facility" : "Add facility"}
-        size="lg"
-      >
-        <div className="space-y-4">
-          {selectedLocation && (
-            <p className="text-sm text-text-secondary">
-              Location: <span className="font-medium text-text-primary">{selectedLocation.name}</span>
-            </p>
-          )}
-          <Input
-            label="Facility name *"
-            value={formData.name}
-            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-            placeholder="e.g. Gaming PC #1, Futsal Court A"
-          />
-          <div>
-            <label className="mb-2 block text-sm font-medium text-text-primary">
-              Facility type *
-            </label>
-            <select
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              value={formGroup}
-              onChange={(e) => {
-                const newGroup = e.target.value as FacilityGroup | "";
-                setFormGroup(newGroup);
-                setFormData((prev) => {
-                  if (!newGroup) {
-                    return prev;
-                  }
-                  const allowed = getAllowedTypesForGroup(newGroup);
-                  const nextType = allowed.includes(prev.type) ? prev.type : allowed[0] ?? "other";
-                  return {
-                    ...prev,
-                    type: nextType,
-                  };
-                });
-              }}
-            >
-              <option value="">Select facility type…</option>
-              {Object.entries(FACILITY_GROUP_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-text-primary">
-              Facility *
-            </label>
-            <select
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              value={formData.type}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  type: e.target.value,
-                }))
-              }
-            >
-              {getAllowedTypesForGroup(formGroup).map((value) => (
-                <option key={value} value={value}>
-                  {FACILITY_TYPE_LABELS[value] || value}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-text-primary">Status *</label>
-            <select
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              value={formData.status}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  status: e.target.value as FacilityStatus,
-                }))
-              }
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="maintenance">Maintenance</option>
-            </select>
-          </div>
-          <Input
-            label="Capacity"
-            type="number"
-            value={formData.capacity?.toString() ?? ""}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                capacity: e.target.value ? Number(e.target.value) : undefined,
-              }))
-            }
-            placeholder="e.g. 4"
-          />
-          <div className="space-y-3 rounded-lg border border-border/60 bg-muted/40 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
-              Configuration for {formatFacilityType(formData.type)}
-            </p>
-            {getDynamicFieldsForType(formData.type).length === 0 && (
-              <p className="text-xs text-text-secondary">
-                No extra configuration for this type. You can still use capacity above.
-              </p>
-            )}
-            {getDynamicFieldsForType(formData.type).map((field) => {
-              const metadata = formData.metadata ?? {};
-              const value = metadata[field.name];
-
-              if (field.type === "checkbox") {
-                return (
-                  <label
-                    key={field.name}
-                    className="flex items-center gap-2 text-sm text-text-primary"
-                  >
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40"
-                      checked={!!value}
-                      onChange={(e) => handleMetadataChange(field, e.target.checked)}
-                    />
-                    <span>{field.label}</span>
-                  </label>
-                );
-              }
-
-              if (field.type === "select" && field.options) {
-                return (
-                  <div key={field.name}>
-                    <label className="mb-1 block text-xs font-medium text-text-secondary">
-                      {field.label}
-                      {field.required && <span className="ml-1 text-red-500">*</span>}
-                    </label>
-                    <select
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      value={value ?? ""}
-                      onChange={(e) => handleMetadataChange(field, e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      {field.options.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              }
-
-              if (field.type === "textarea") {
-                return (
-                  <div key={field.name}>
-                    <label className="mb-1 block text-xs font-medium text-text-secondary">
-                      {field.label}
-                    </label>
-                    <textarea
-                      className="min-h-[80px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      placeholder={field.placeholder}
-                      value={value ?? ""}
-                      onChange={(e) => handleMetadataChange(field, e.target.value)}
-                    />
-                  </div>
-                );
-              }
-
-              return (
-                <Input
-                  key={field.name}
-                  label={field.label}
-                  type={field.type === "number" ? "number" : "text"}
-                  value={
-                    field.type === "number" && typeof value === "number"
-                      ? value.toString()
-                      : value ?? ""
-                  }
-                  placeholder={field.placeholder}
-                  onChange={(e) => handleMetadataChange(field, e.target.value)}
-                />
-              );
-            })}
-          </div>
-          {isGamingType(formData.type) && (
-            <GamingPackagesEditor
-              packages={getGamingPackagesFromMetadata(
-                (formData.metadata as Record<string, any> | null | undefined) ?? {}
-              )}
-              onChange={(nextPackages) =>
-                setFormData((prev) => {
-                  const baseMetadata: Record<string, any> = {
-                    ...(prev.metadata ?? {}),
-                  };
-                  if (!nextPackages.length) {
-                    delete (baseMetadata as any).packages;
-                  } else {
-                    (baseMetadata as any).packages = nextPackages;
-                  }
-                  return {
-                    ...prev,
-                    metadata: Object.keys(baseMetadata).length ? baseMetadata : {},
-                  };
-                })
-              }
-            />
-          )}
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="secondary" onClick={closeModal}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving…
-                </>
-              ) : editingFacility ? (
-                "Save"
-              ) : (
-                "Add facility"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
