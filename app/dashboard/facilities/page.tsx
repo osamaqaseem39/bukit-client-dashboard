@@ -56,6 +56,228 @@ const FACILITY_TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+type FacilityGroup = "gaming-zone" | "arena" | "snooker-club" | "table-tennis-club";
+
+const FACILITY_GROUP_LABELS: Record<FacilityGroup, string> = {
+  "gaming-zone": "Gaming Zone",
+  arena: "Arena",
+  "snooker-club": "Snooker Club",
+  "table-tennis-club": "Table Tennis Club",
+};
+
+const FACILITY_GROUP_TO_TYPES: Record<FacilityGroup, string[]> = {
+  "gaming-zone": ["gaming-pc", "ps4", "ps5", "xbox", "vr"],
+  arena: ["futsal-field", "cricket-pitch", "padel-court"],
+  "snooker-club": ["snooker-table"],
+  "table-tennis-club": ["table-tennis-table"],
+};
+
+const DEFAULT_FACILITY_GROUP: FacilityGroup = "gaming-zone";
+
+function getGroupForType(type: string): FacilityGroup | "" {
+  const entry = Object.entries(FACILITY_GROUP_TO_TYPES).find(([, types]) =>
+    types.includes(type)
+  );
+  return entry ? (entry[0] as FacilityGroup) : "";
+}
+
+function getAllowedTypesForGroup(group: FacilityGroup | ""): string[] {
+  if (!group) {
+    return Object.keys(FACILITY_TYPE_LABELS);
+  }
+  const base = FACILITY_GROUP_TO_TYPES[group] || [];
+  return base.includes("other") ? base : [...base, "other"];
+}
+
+type GamingPackage = {
+  name: string;
+  price: number;
+  duration_hours?: number;
+  start_time?: string;
+  end_time?: string;
+};
+
+interface GamingPackagesEditorProps {
+  packages: GamingPackage[];
+  onChange: (packages: GamingPackage[]) => void;
+}
+
+function isGamingType(type: string): boolean {
+  return FACILITY_GROUP_TO_TYPES["gaming-zone"].includes(type);
+}
+
+function getGamingPackagesFromMetadata(
+  metadata: Record<string, any> | null | undefined
+): GamingPackage[] {
+  const raw = (metadata as any)?.packages;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((pkg: any) => ({
+    name: typeof pkg?.name === "string" ? pkg.name : "",
+    price:
+      typeof pkg?.price === "number"
+        ? pkg.price
+        : pkg?.price != null
+        ? Number(pkg.price) || 0
+        : 0,
+    duration_hours:
+      typeof pkg?.duration_hours === "number"
+        ? pkg.duration_hours
+        : pkg?.duration_hours != null
+        ? Number(pkg.duration_hours) || undefined
+        : undefined,
+    start_time: typeof pkg?.start_time === "string" ? pkg.start_time : "",
+    end_time: typeof pkg?.end_time === "string" ? pkg.end_time : "",
+  }));
+}
+
+function GamingPackagesEditor({
+  packages,
+  onChange,
+}: GamingPackagesEditorProps) {
+  const handleAdd = () => {
+    onChange([
+      ...packages,
+      {
+        name: "",
+        price: 0,
+        duration_hours: undefined,
+        start_time: "",
+        end_time: "",
+      },
+    ]);
+  };
+
+  const handleChange = (
+    index: number,
+    field: keyof GamingPackage,
+    value: any
+  ) => {
+    const next = packages.slice();
+    next[index] = { ...next[index], [field]: value };
+    onChange(next);
+  };
+
+  const handleRemove = (index: number) => {
+    const next = packages.filter((_, i) => i !== index);
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border/60 bg-muted/40 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+          Packages (optional)
+        </p>
+        <button
+          type="button"
+          className="text-xs font-medium text-primary hover:underline"
+          onClick={handleAdd}
+        >
+          + Add package
+        </button>
+      </div>
+      {packages.length === 0 && (
+        <p className="text-xs text-text-secondary">
+          Add time-based packages like Nighter or 3 hours.
+        </p>
+      )}
+      {packages.map((pkg, index) => (
+        <div
+          key={index}
+          className="space-y-2 rounded-md border border-border/60 bg-background px-3 py-3"
+        >
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex-1">
+              <Input
+                label="Package name"
+                value={pkg.name}
+                onChange={(e) =>
+                  handleChange(index, "name", e.target.value)
+                }
+                placeholder="e.g. Nighter, 3 hours"
+              />
+            </div>
+            <div className="w-full sm:w-32">
+              <Input
+                label="Price"
+                type="number"
+                value={
+                  typeof pkg.price === "number" ? pkg.price.toString() : ""
+                }
+                onChange={(e) =>
+                  handleChange(
+                    index,
+                    "price",
+                    e.target.value ? Number(e.target.value) : 0
+                  )
+                }
+                placeholder="e.g. 2000"
+              />
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div>
+              <Input
+                label="Duration (hours)"
+                type="number"
+                value={
+                  typeof pkg.duration_hours === "number"
+                    ? pkg.duration_hours.toString()
+                    : ""
+                }
+                onChange={(e) =>
+                  handleChange(
+                    index,
+                    "duration_hours",
+                    e.target.value ? Number(e.target.value) : undefined
+                  )
+                }
+                placeholder="e.g. 3"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">
+                Start time
+              </label>
+              <input
+                type="time"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                value={pkg.start_time ?? ""}
+                onChange={(e) =>
+                  handleChange(index, "start_time", e.target.value)
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">
+                End time
+              </label>
+              <input
+                type="time"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                value={pkg.end_time ?? ""}
+                onChange={(e) =>
+                  handleChange(index, "end_time", e.target.value)
+                }
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              className="text-xs text-text-secondary hover:text-error"
+              onClick={() => handleRemove(index)}
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const FACILITY_DYNAMIC_FIELDS: Record<string, DynamicFieldConfig[]> = {
   "gaming-pc": [
     {
@@ -285,6 +507,7 @@ export default function FacilitiesPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState<string>("");
+  const [formGroup, setFormGroup] = useState<FacilityGroup | "">("");
 
   const [formData, setFormData] = useState<CreateFacilityPayload>({
     name: "",
@@ -345,9 +568,13 @@ export default function FacilitiesPage() {
 
   function openCreateModal() {
     setEditingFacility(null);
+    const initialGroup: FacilityGroup = DEFAULT_FACILITY_GROUP;
+    const allowedTypes = getAllowedTypesForGroup(initialGroup);
+    const initialType = allowedTypes[0] ?? "other";
+    setFormGroup(initialGroup);
     setFormData({
       name: "",
-      type: "other",
+      type: initialType,
       status: "active",
       capacity: undefined,
       metadata: {},
@@ -357,6 +584,7 @@ export default function FacilitiesPage() {
 
   function openEditModal(facility: Facility) {
     setEditingFacility(facility);
+    setFormGroup(getGroupForType(facility.type));
     setFormData({
       name: facility.name,
       type: facility.type,
@@ -370,6 +598,7 @@ export default function FacilitiesPage() {
   function closeModal() {
     setIsModalOpen(false);
     setEditingFacility(null);
+    setFormGroup("");
     setFormData({
       name: "",
       type: "other",
@@ -720,15 +949,53 @@ export default function FacilitiesPage() {
             placeholder="e.g. Gaming PC #1, Futsal Court A"
           />
           <div>
-            <label className="mb-2 block text-sm font-medium text-text-primary">Type *</label>
+            <label className="mb-2 block text-sm font-medium text-text-primary">
+              Facility type *
+            </label>
+            <select
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              value={formGroup}
+              onChange={(e) => {
+                const newGroup = e.target.value as FacilityGroup | "";
+                setFormGroup(newGroup);
+                setFormData((prev) => {
+                  if (!newGroup) {
+                    return prev;
+                  }
+                  const allowed = getAllowedTypesForGroup(newGroup);
+                  const nextType = allowed.includes(prev.type) ? prev.type : allowed[0] ?? "other";
+                  return {
+                    ...prev,
+                    type: nextType,
+                  };
+                });
+              }}
+            >
+              <option value="">Select facility type…</option>
+              {Object.entries(FACILITY_GROUP_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-text-primary">
+              Facility *
+            </label>
             <select
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               value={formData.type}
-              onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  type: e.target.value,
+                }))
+              }
             >
-              {Object.entries(FACILITY_TYPE_LABELS).map(([value, label]) => (
+              {getAllowedTypesForGroup(formGroup).map((value) => (
                 <option key={value} value={value}>
-                  {label}
+                  {FACILITY_TYPE_LABELS[value] || value}
                 </option>
               ))}
             </select>
@@ -847,6 +1114,29 @@ export default function FacilitiesPage() {
               );
             })}
           </div>
+          {isGamingType(formData.type) && (
+            <GamingPackagesEditor
+              packages={getGamingPackagesFromMetadata(
+                (formData.metadata as Record<string, any> | null | undefined) ?? {}
+              )}
+              onChange={(nextPackages) =>
+                setFormData((prev) => {
+                  const baseMetadata: Record<string, any> = {
+                    ...(prev.metadata ?? {}),
+                  };
+                  if (!nextPackages.length) {
+                    delete (baseMetadata as any).packages;
+                  } else {
+                    (baseMetadata as any).packages = nextPackages;
+                  }
+                  return {
+                    ...prev,
+                    metadata: Object.keys(baseMetadata).length ? baseMetadata : {},
+                  };
+                })
+              }
+            />
+          )}
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="secondary" onClick={closeModal}>
               Cancel
