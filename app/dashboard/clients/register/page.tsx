@@ -331,9 +331,8 @@ export default function ClientOnboardingPage() {
           email: businessForm.email,
           password: businessForm.adminPassword,
         },
-        client: {
-          company_name: businessForm.companyName,
-          legal_name: businessForm.legalName || undefined,
+          client: {
+            company_name: businessForm.companyName,
           contact_name: businessForm.contactName,
           email: businessForm.email,
           phone: businessForm.phone,

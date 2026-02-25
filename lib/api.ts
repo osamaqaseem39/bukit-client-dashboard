@@ -385,7 +385,6 @@ export interface ClientSummary {
 }
 
 export interface ClientDetail extends ClientSummary {
-  legal_name?: string | null;
   address?: string | null;
   state?: string | null;
   postal_code?: string | null;
@@ -418,7 +417,6 @@ export async function getClientByUserIdApi(userId: string) {
 
 export interface UpdateClientPayload {
   company_name?: string | null;
-  legal_name?: string | null;
   contact_name?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -479,7 +477,6 @@ export interface CreateClientUserPayload {
 
 export interface CreateClientProfilePayload {
   company_name: string;
-  legal_name?: string;
   contact_name: string;
   email: string;
   phone: string;

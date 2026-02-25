@@ -41,7 +41,6 @@ export default function SettingsPage() {
 
   const [formData, setFormData] = useState<UpdateClientPayload>({
     company_name: "",
-    legal_name: null,
     contact_name: null,
     email: null,
     phone: null,
@@ -76,7 +75,6 @@ export default function SettingsPage() {
       setClientData(data);
       setFormData({
         company_name: data.company_name || "",
-        legal_name: data.user?.name || null,
         contact_name: data.contact_name || null,
         email: data.email || null,
         phone: data.phone || null,
@@ -170,16 +168,6 @@ export default function SettingsPage() {
                   setFormData((prev) => ({
                     ...prev,
                     company_name: e.target.value,
-                  }))
-                }
-              />
-              <Input
-                label="Legal Name"
-                value={formData.legal_name || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    legal_name: e.target.value || null,
                   }))
                 }
               />
