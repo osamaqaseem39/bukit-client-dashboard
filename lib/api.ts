@@ -344,6 +344,36 @@ export async function getDailyLedgerApi(params: LedgerQueryParams = {}) {
   return apiFetch<Booking[]>(path);
 }
 
+export interface BookingsReportRow {
+  date: string;
+  total_bookings: number;
+  confirmed: number;
+  pending: number;
+  cancelled: number;
+  walk_ins: number;
+  revenue: number | null;
+}
+
+export interface BookingsReportQuery {
+  from?: string;
+  to?: string;
+  location_id?: string;
+  facility_id?: string;
+}
+
+export async function getBookingsReportApi(
+  params: BookingsReportQuery = {}
+): Promise<BookingsReportRow[]> {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.location_id) query.set("location_id", params.location_id);
+  if (params.facility_id) query.set("facility_id", params.facility_id);
+  const qs = query.toString();
+  const path = qs ? `/reports/bookings?${qs}` : "/reports/bookings";
+  return apiFetch<BookingsReportRow[]>(path);
+}
+
 export async function checkInBookingApi(id: string) {
   return apiFetch<Booking>(`/bookings/${id}/check-in`, {
     method: "PATCH",
