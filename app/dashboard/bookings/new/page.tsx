@@ -33,6 +33,8 @@ export default function NewBookingPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const selectedFacility = facilities.find((f) => f.id === facilityId);
+
   useEffect(() => {
     let isMounted = true;
     async function load() {
@@ -204,6 +206,47 @@ export default function NewBookingPage() {
                 </select>
               </div>
             </div>
+
+            {selectedFacility && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 space-y-1">
+                <div className="font-medium text-gray-900">
+                  {selectedFacility.name}{" "}
+                  <span className="ml-2 inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs uppercase tracking-wide text-gray-700">
+                    {selectedFacility.type}
+                  </span>
+                </div>
+                {selectedFacility.metadata && selectedFacility.type === "gaming-pc" && (
+                  <div>
+                    <span className="font-semibold">PC specs:</span>{" "}
+                    <span>
+                      {(selectedFacility.metadata as any).specs || "Not specified"}
+                    </span>
+                  </div>
+                )}
+                {selectedFacility.metadata &&
+                  (selectedFacility.type === "ps4" ||
+                    selectedFacility.type === "ps5" ||
+                    selectedFacility.type === "xbox") && (
+                    <>
+                      <div>
+                        <span className="font-semibold">Screen size:</span>{" "}
+                        <span>
+                          {(selectedFacility.metadata as any).screen_size_inches
+                            ? `${(selectedFacility.metadata as any).screen_size_inches}" `
+                            : "Not specified"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="font-semibold">Games available:</span>{" "}
+                        <span>
+                          {(selectedFacility.metadata as any).games_available ||
+                            "Not specified"}
+                        </span>
+                      </div>
+                    </>
+                  )}
+              </div>
+            )}
 
             <div className="grid gap-4 md:grid-cols-3">
               <Input
