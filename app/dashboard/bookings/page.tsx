@@ -11,7 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/Table";
-import { getBookingsApi, getLocationsApi, getFacilitiesByLocationApi } from "@/lib/api";
+import Button from "@/components/ui/Button";
+import Link from "next/link";
+import {
+  getBookingsApi,
+  getLocationsApi,
+  getFacilitiesByLocationApi,
+} from "@/lib/api";
 import type { Booking, Location, Facility } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 
@@ -110,11 +116,16 @@ export default function BookingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text-primary">Bookings</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          View bookings for your locations and facilities. Bookings are created in the app from the facilities you add.
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Bookings</h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            View bookings for your locations and facilities. Bookings are created in the app from the facilities you add.
+          </p>
+        </div>
+        <Link href="/dashboard/bookings/new">
+          <Button variant="primary">New walk-in booking</Button>
+        </Link>
       </div>
 
       {error && (

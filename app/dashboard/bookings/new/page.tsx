@@ -13,7 +13,7 @@ import type { Location, Facility } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-export default function WalkInBookingPage() {
+export default function NewBookingPage() {
   const router = useRouter();
   const [locations, setLocations] = useState<Location[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
@@ -113,7 +113,7 @@ export default function WalkInBookingPage() {
       });
       setSuccess("Walk-in booking created successfully.");
       setTimeout(() => {
-        router.push("/dashboard/ledger");
+        router.push("/dashboard/bookings");
       }, 1200);
     } catch (err: any) {
       setError(err.message || "Failed to create booking");
@@ -251,18 +251,14 @@ export default function WalkInBookingPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
               />
-              <Input
-                label="Currency"
-                value="PKR"
-                disabled
-              />
+              <Input label="Currency" value="PKR" disabled />
             </div>
 
             <div className="flex items-center justify-end gap-3">
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => router.push("/dashboard/ledger")}
+                onClick={() => router.push("/dashboard/bookings")}
               >
                 Cancel
               </Button>

@@ -20,7 +20,6 @@ import {
 } from "@/lib/api";
 import type { Booking, Location, Facility } from "@/lib/api";
 import { Loader2 } from "lucide-react";
-import Link from "next/link";
 
 export default function LedgerPage() {
   const [date, setDate] = useState<string>(() => {
@@ -160,16 +159,11 @@ export default function LedgerPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">Daily ledger</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            View today&apos;s bookings and walk-ins, and mark guests as checked in.
-          </p>
-        </div>
-        <Link href="/dashboard/ledger/booking">
-          <Button variant="primary">New walk-in booking</Button>
-        </Link>
+      <div>
+        <h1 className="text-2xl font-semibold text-text-primary">Daily ledger</h1>
+        <p className="mt-1 text-sm text-text-secondary">
+          View today&apos;s bookings and mark guests as checked in.
+        </p>
       </div>
 
       {error && (
