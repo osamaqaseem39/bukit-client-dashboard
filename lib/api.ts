@@ -294,6 +294,14 @@ export interface Booking {
   end_time: string;
   created_at?: string;
   updated_at?: string;
+  // Optional extended fields (walk-ins, ledger)
+  is_walk_in?: boolean;
+  guest_name?: string | null;
+  guest_phone?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  checked_in_at?: string | null;
+  check_in_status?: string | null;
 }
 
 export async function getBookingsApi() {

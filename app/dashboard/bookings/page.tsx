@@ -176,6 +176,7 @@ export default function BookingsPage() {
                 <TableHead>Booking</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Facility</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Start</TableHead>
                 <TableHead>End</TableHead>
                 <TableHead>Status</TableHead>
@@ -192,9 +193,22 @@ export default function BookingsPage() {
               {!loading &&
                 sortedBookings.map((booking) => (
                   <TableRow key={booking.id}>
-                    <TableCell className="font-medium">{booking.id.slice(0, 8)}…</TableCell>
+                    <TableCell className="font-medium">
+                      {booking.id.slice(0, 8)}…
+                    </TableCell>
                     <TableCell>{locationName(booking.location_id)}</TableCell>
                     <TableCell>{facilityName(booking.facility_id)}</TableCell>
+                    <TableCell>
+                      {booking.is_walk_in ? (
+                        <span className="inline-flex rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                          Walk-in
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-500">
+                          Online
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>{formatDateTime(booking.start_time)}</TableCell>
                     <TableCell>{formatDateTime(booking.end_time)}</TableCell>
                     <TableCell>
