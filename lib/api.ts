@@ -300,6 +300,48 @@ export async function getBookingsApi() {
   return apiFetch<Booking[]>("/bookings");
 }
 
+export interface CreateBookingPayload {
+  location_id: string;
+  facility_id?: string;
+  start_time: string | Date;
+  end_time: string | Date;
+  status?: "pending" | "confirmed" | "cancelled";
+  is_walk_in?: boolean;
+  guest_name?: string;
+  guest_phone?: string;
+  amount?: number;
+  currency?: string;
+}
+
+export async function createBookingApi(payload: CreateBookingPayload) {
+  return apiFetch<Booking>("/bookings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface LedgerQueryParams {
+  date?: string;
+  location_id?: string;
+  facility_id?: string;
+}
+
+export async function getDailyLedgerApi(params: LedgerQueryParams = {}) {
+  const query = new URLSearchParams();
+  if (params.date) query.set("date", params.date);
+  if (params.location_id) query.set("location_id", params.location_id);
+  if (params.facility_id) query.set("facility_id", params.facility_id);
+  const qs = query.toString();
+  const path = qs ? `/ledger/daily?${qs}` : "/ledger/daily";
+  return apiFetch<Booking[]>(path);
+}
+
+export async function checkInBookingApi(id: string) {
+  return apiFetch<Booking>(`/bookings/${id}/check-in`, {
+    method: "PATCH",
+  });
+}
+
 // Locations
 export interface Location {
   id: string;

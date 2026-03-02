@@ -133,6 +133,12 @@ const navItems: NavItem[] = [
     moduleKey: "bookings",
   },
   {
+    label: "Ledger",
+    href: "/dashboard/ledger",
+    icon: <Table2 className="h-5 w-5" />,
+    roles: ["client"],
+  },
+  {
     label: "Analytics",
     href: "/dashboard/analytics",
     icon: <BarChart3 className="h-5 w-5" />,
@@ -172,6 +178,7 @@ export default function Sidebar() {
         "Bookings",
         "Locations",
         "Facilities",
+        "Ledger",
         "Settings",
       ]);
       return navItems.filter((item) => allowedClientLabels.has(item.label));
