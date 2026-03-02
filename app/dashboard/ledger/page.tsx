@@ -344,7 +344,7 @@ export default function LedgerPage() {
                       ) : (
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="secondary"
                           disabled={checkingInId === booking.id}
                           onClick={() => handleCheckIn(booking.id)}
                         >
