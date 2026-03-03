@@ -96,13 +96,49 @@ type GamingPackage = {
   end_time?: string;
 };
 
+type GamingPcUnit = {
+  label: string;
+  cpu: string;
+  gpu: string;
+  ram: string;
+  refreshRate: string;
+};
+
 interface GamingPackagesEditorProps {
   packages: GamingPackage[];
   onChange: (packages: GamingPackage[]) => void;
 }
 
+interface GamingPcSpecsEditorProps {
+  units: GamingPcUnit[];
+  onChange: (units: GamingPcUnit[]) => void;
+}
+
 function isGamingType(type: string): boolean {
   return FACILITY_GROUP_TO_TYPES["gaming-zone"].includes(type);
+}
+
+function getGamingPcsFromMetadata(
+  metadata: Record<string, any> | null | undefined
+): GamingPcUnit[] {
+  const raw = (metadata as any)?.pcs;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((pc: any, index: number) => ({
+    label:
+      typeof pc?.label === "string" && pc.label.trim()
+        ? pc.label
+        : `PC ${index + 1}`,
+    cpu: typeof pc?.cpu === "string" ? pc.cpu : "",
+    gpu: typeof pc?.gpu === "string" ? pc.gpu : "",
+    ram: typeof pc?.ram === "string" ? pc.ram : "",
+    refreshRate:
+      typeof pc?.refresh_rate_hz === "number"
+        ? pc.refresh_rate_hz.toString()
+        : pc?.refresh_rate_hz != null
+        ? String(pc.refresh_rate_hz)
+        : "",
+  }));
 }
 
 function getGamingPackagesFromMetadata(
@@ -277,6 +313,111 @@ function GamingPackagesEditor({
   );
 }
 
+function GamingPcSpecsEditor({ units, onChange }: GamingPcSpecsEditorProps) {
+  const handleAdd = () => {
+    onChange([
+      ...units,
+      {
+        label: `PC ${units.length + 1}`,
+        cpu: "",
+        gpu: "",
+        ram: "",
+        refreshRate: "",
+      },
+    ]);
+  };
+
+  const handleChange = (
+    index: number,
+    field: keyof GamingPcUnit,
+    value: string
+  ) => {
+    const next = units.slice();
+    next[index] = { ...next[index], [field]: value };
+    onChange(next);
+  };
+
+  const handleRemove = (index: number) => {
+    const next = units.filter((_, i) => i !== index);
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border/60 bg-muted/40 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+          PC configuration (per machine)
+        </p>
+        <button
+          type="button"
+          className="text-xs font-medium text-primary hover:underline"
+          onClick={handleAdd}
+        >
+          + Add PC
+        </button>
+      </div>
+      {units.length === 0 && (
+        <p className="text-xs text-text-secondary">
+          Add each PC with its own CPU, GPU, RAM, and refresh rate.
+        </p>
+      )}
+      {units.map((pc, index) => (
+        <div
+          key={index}
+          className="space-y-2 rounded-md border border-border/60 bg-background px-3 py-3"
+        >
+          <div className="grid gap-2 sm:grid-cols-5">
+            <Input
+              label="Label"
+              placeholder={`PC ${index + 1}`}
+              value={pc.label}
+              onChange={(e) => handleChange(index, "label", e.target.value)}
+            />
+            <Input
+              label="CPU"
+              placeholder="e.g. i5 / i7"
+              value={pc.cpu}
+              onChange={(e) => handleChange(index, "cpu", e.target.value)}
+            />
+            <Input
+              label="GPU"
+              placeholder="e.g. GTX 1660"
+              value={pc.gpu}
+              onChange={(e) => handleChange(index, "gpu", e.target.value)}
+            />
+            <Input
+              label="RAM"
+              placeholder="e.g. 16GB"
+              value={pc.ram}
+              onChange={(e) => handleChange(index, "ram", e.target.value)}
+            />
+            <div className="flex items-end gap-2">
+              <Input
+                label="Refresh (Hz)"
+                type="number"
+                placeholder="144"
+                value={pc.refreshRate}
+                onChange={(e) =>
+                  handleChange(index, "refreshRate", e.target.value)
+                }
+              />
+              {units.length > 1 && (
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-secondary hover:text-error"
+                  onClick={() => handleRemove(index)}
+                >
+                  <span className="text-lg leading-none">×</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const FACILITY_DYNAMIC_FIELDS: Record<string, DynamicFieldConfig[]> = {
   "gaming-pc": [
     {
@@ -285,12 +426,6 @@ const FACILITY_DYNAMIC_FIELDS: Record<string, DynamicFieldConfig[]> = {
       type: "number",
       required: true,
       placeholder: "e.g. 25",
-    },
-    {
-      name: "specs",
-      label: "Specs / notes",
-      type: "textarea",
-      placeholder: "GPU, CPU, RAM or other details",
     },
     {
       name: "is_private_room",
@@ -808,12 +943,18 @@ export default function FacilitiesPage() {
             <Input
               label="Capacity"
               type="number"
+              min={0}
               value={formData.capacity?.toString() ?? ""}
               onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  capacity: e.target.value ? Number(e.target.value) : undefined,
-                }))
+                setFormData((prev) => {
+                  const raw = e.target.value;
+                  if (!raw) {
+                    return { ...prev, capacity: undefined };
+                  }
+                  const num = Number(raw);
+                  const safe = Number.isNaN(num) ? 0 : Math.max(0, num);
+                  return { ...prev, capacity: safe };
+                })
               }
               placeholder="e.g. 4"
             />
@@ -912,6 +1053,56 @@ export default function FacilitiesPage() {
                   />
                 );
               })}
+              {formData.type === "gaming-pc" && (
+                <GamingPcSpecsEditor
+                  units={getGamingPcsFromMetadata(
+                    (formData.metadata as Record<string, any> | null | undefined) ??
+                      {}
+                  )}
+                  onChange={(units) =>
+                    setFormData((prev) => {
+                      const base: Record<string, any> = {
+                        ...(prev.metadata ?? {}),
+                      };
+                      const pcsPayload = units
+                        .map((pc, index) => {
+                          const label = pc.label.trim() || `PC ${index + 1}`;
+                          const cpu = pc.cpu.trim();
+                          const gpu = pc.gpu.trim();
+                          const ram = pc.ram.trim();
+                          const refreshStr = pc.refreshRate.trim();
+                          const hasAny =
+                            label || cpu || gpu || ram || refreshStr;
+                          if (!hasAny) return null;
+                          const refresh_rate_hz = refreshStr
+                            ? Number(refreshStr)
+                            : undefined;
+                          return {
+                            label,
+                            cpu: cpu || undefined,
+                            gpu: gpu || undefined,
+                            ram: ram || undefined,
+                            refresh_rate_hz: !Number.isNaN(refresh_rate_hz)
+                              ? refresh_rate_hz
+                              : undefined,
+                          };
+                        })
+                        .filter(Boolean);
+
+                      if (!pcsPayload.length) {
+                        delete (base as any).pcs;
+                      } else {
+                        (base as any).pcs = pcsPayload;
+                      }
+
+                      return {
+                        ...prev,
+                        metadata: Object.keys(base).length ? base : {},
+                      };
+                    })
+                  }
+                />
+              )}
             </div>
             {isGamingType(formData.type) && (
               <GamingPackagesEditor
