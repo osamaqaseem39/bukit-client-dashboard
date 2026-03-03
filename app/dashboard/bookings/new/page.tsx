@@ -208,21 +208,49 @@ export default function NewBookingPage() {
             </div>
 
             {selectedFacility && (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 space-y-1">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 space-y-2">
                 <div className="font-medium text-gray-900">
                   {selectedFacility.name}{" "}
                   <span className="ml-2 inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs uppercase tracking-wide text-gray-700">
                     {selectedFacility.type}
                   </span>
                 </div>
-                {selectedFacility.metadata && selectedFacility.type === "gaming-pc" && (
-                  <div>
-                    <span className="font-semibold">PC specs:</span>{" "}
-                    <span>
-                      {(selectedFacility.metadata as any).specs || "Not specified"}
-                    </span>
-                  </div>
-                )}
+                {selectedFacility.metadata &&
+                  selectedFacility.type === "gaming-pc" && (
+                    <div className="space-y-1">
+                      <div className="font-semibold">PC units:</div>
+                      {Array.isArray((selectedFacility.metadata as any).pcs) &&
+                      (selectedFacility.metadata as any).pcs.length > 0 ? (
+                        <ul className="list-disc pl-5 space-y-0.5">
+                          {(selectedFacility.metadata as any).pcs.map(
+                            (pc: any, index: number) => (
+                              <li key={index}>
+                                <span className="font-medium">
+                                  {pc.label || `PC ${index + 1}`}:
+                                </span>{" "}
+                                <span>
+                                  {[
+                                    pc.cpu && `CPU: ${pc.cpu}`,
+                                    pc.gpu && `GPU: ${pc.gpu}`,
+                                    pc.ram && `RAM: ${pc.ram}`,
+                                    pc.refresh_rate_hz &&
+                                      `Refresh: ${pc.refresh_rate_hz}Hz`,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" | ") || "Specs not specified"}
+                                </span>
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      ) : (
+                        <div>
+                          {(selectedFacility.metadata as any).specs ||
+                            "Specs not specified"}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 {selectedFacility.metadata &&
                   (selectedFacility.type === "ps4" ||
                     selectedFacility.type === "ps5" ||
