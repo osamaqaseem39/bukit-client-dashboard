@@ -536,6 +536,24 @@ const FACILITY_DYNAMIC_FIELDS: Record<string, DynamicFieldConfig[]> = {
   ],
   "futsal-field": [
     {
+      name: "length_meters",
+      label: "Field length (m)",
+      type: "number",
+      placeholder: "e.g. 40",
+    },
+    {
+      name: "width_meters",
+      label: "Field width (m)",
+      type: "number",
+      placeholder: "e.g. 20",
+    },
+    {
+      name: "height_meters",
+      label: "Net / ceiling height (m)",
+      type: "number",
+      placeholder: "e.g. 4.5",
+    },
+    {
       name: "surface_type",
       label: "Surface type",
       type: "select",
@@ -557,6 +575,24 @@ const FACILITY_DYNAMIC_FIELDS: Record<string, DynamicFieldConfig[]> = {
     },
   ],
   "cricket-pitch": [
+    {
+      name: "length_meters",
+      label: "Pitch length (m)",
+      type: "number",
+      placeholder: "e.g. 20.12",
+    },
+    {
+      name: "width_meters",
+      label: "Pitch width (m)",
+      type: "number",
+      placeholder: "e.g. 3.05",
+    },
+    {
+      name: "height_meters",
+      label: "Net / boundary height (m)",
+      type: "number",
+      placeholder: "e.g. 3",
+    },
     {
       name: "pitch_type",
       label: "Pitch type",
