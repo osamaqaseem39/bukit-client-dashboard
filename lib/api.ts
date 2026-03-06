@@ -515,6 +515,12 @@ export interface UpdateClientPayload {
   description?: string | null;
   logo_url?: string | null;
   cover_image_url?: string | null;
+  /**
+   * Optional latitude/longitude for the client's primary location.
+   * These mirror the fields on ClientDetail and are forwarded to the backend.
+   */
+  latitude?: number | string | null;
+  longitude?: number | string | null;
 }
 
 export async function updateClientApi(id: string, payload: UpdateClientPayload) {
