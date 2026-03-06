@@ -20,6 +20,7 @@ import {
   Footprints,
   Crosshair,
   Briefcase,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DashboardModuleKey } from "@/lib/api";
@@ -113,7 +114,7 @@ const navItems: NavItem[] = [
   {
     label: "Facilities",
     href: "/dashboard/facilities",
-    icon: <CircleDot className="h-5 w-5" />,
+    icon: <Building2 className="h-5 w-5" />,
     roles: ["client"],
     // No moduleKey yet so it's available to all client users;
     // can be module-gated later when backend exposes a facilities module key.
@@ -172,16 +173,24 @@ export default function Sidebar() {
   const visibleNavItems = useMemo(() => {
     if (!user) return navItems;
 
-    // For client dashboard users, only show core operational items.
+    // For client dashboard users, show a curated set of items in a specific order:
+    // - Top: Dashboard, Analytics, Bookings
+    // - Middle: Ledger
+    // - Bottom: Locations, Facilities, Settings
     if (user.role === "client") {
-      const allowedClientLabels = new Set([
+      const clientOrder = [
+        "Dashboard",
+        "Analytics",
         "Bookings",
+        "Ledger",
         "Locations",
         "Facilities",
-        "Ledger",
         "Settings",
-      ]);
-      return navItems.filter((item) => allowedClientLabels.has(item.label));
+      ];
+
+      return clientOrder
+        .map((label) => navItems.find((item) => item.label === label))
+        .filter((item): item is NavItem => Boolean(item));
     }
 
     // For other roles (admin, super_admin, user) keep existing behavior.

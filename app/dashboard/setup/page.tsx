@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import {
   createClientWithUserApi,
   createLocationApi,
+  createFacilityAtLocationApi,
   getClientByIdApi,
   getLocationsApi,
   updateClientApi,
@@ -59,8 +60,6 @@ export default function DashboardSetupPage() {
     description: "",
     logoUrl: "",
     coverImageUrl: "",
-    latitude: "",
-    longitude: "",
     adminPassword: "",
   });
   const [step1Errors, setStep1Errors] = useState<StepErrorState>(
@@ -80,6 +79,9 @@ export default function DashboardSetupPage() {
       longitude: undefined,
     },
   ]);
+  const [locationFacilityTypes, setLocationFacilityTypes] = useState<string[][]>(
+    [[]]
+  );
   const [step2Errors, setStep2Errors] = useState<StepErrorState>(
     initialErrorState
   );
@@ -148,8 +150,12 @@ export default function DashboardSetupPage() {
                     return isNaN(num) ? undefined : num;
                   })()
                 : undefined,
+            facility_types: (loc as any).facility_types ?? undefined,
           }));
           setLocations(mapped);
+          setLocationFacilityTypes(
+            mapped.map((loc) => loc.facility_types ?? []) as string[][]
+          );
         }
       } catch (err: any) {
         setLoadError(err.message || "Failed to load existing business data");
@@ -240,11 +246,13 @@ export default function DashboardSetupPage() {
         longitude: undefined,
       },
     ]);
+    setLocationFacilityTypes((prev) => [...prev, []]);
   }
 
   function removeLocation(index: number) {
     if (locations.length > 1) {
       setLocations((prev) => prev.filter((_, i) => i !== index));
+      setLocationFacilityTypes((prev) => prev.filter((_, i) => i !== index));
     }
   }
 
@@ -270,18 +278,6 @@ export default function DashboardSetupPage() {
     }
     if (!businessForm.country.trim()) {
       errors.fields.country = "Country is required";
-    }
-    if (businessForm.latitude && businessForm.latitude.trim()) {
-      const lat = Number(businessForm.latitude);
-      if (isNaN(lat) || lat < -90 || lat > 90) {
-        errors.fields.latitude = "Latitude must be between -90 and 90";
-      }
-    }
-    if (businessForm.longitude && businessForm.longitude.trim()) {
-      const lng = Number(businessForm.longitude);
-      if (isNaN(lng) || lng < -180 || lng > 180) {
-        errors.fields.longitude = "Longitude must be between -180 and 180";
-      }
     }
     if (!isEditing) {
       if (!businessForm.adminPassword.trim()) {
@@ -342,6 +338,19 @@ export default function DashboardSetupPage() {
     return true;
   }
 
+  function toggleFacilityType(index: number, type: string) {
+    setLocationFacilityTypes((prev) => {
+      const next = [...prev];
+      const current = next[index] ?? [];
+      if (current.includes(type)) {
+        next[index] = current.filter((t) => t !== type);
+      } else {
+        next[index] = [...current, type];
+      }
+      return next;
+    });
+  }
+
   async function handleSubmitStep1() {
     if (!validateStep1()) return;
 
@@ -364,12 +373,6 @@ export default function DashboardSetupPage() {
           description: businessForm.description || null,
           logo_url: businessForm.logoUrl || null,
           cover_image_url: businessForm.coverImageUrl || null,
-          latitude: businessForm.latitude
-            ? Number(businessForm.latitude)
-            : null,
-          longitude: businessForm.longitude
-            ? Number(businessForm.longitude)
-            : null,
         };
 
         await updateClientApi(clientIdFromQuery, payload);
@@ -401,12 +404,6 @@ export default function DashboardSetupPage() {
             description: businessForm.description || undefined,
             logo_url: businessForm.logoUrl || undefined,
             cover_image_url: businessForm.coverImageUrl || undefined,
-            latitude: businessForm.latitude
-              ? Number(businessForm.latitude)
-              : undefined,
-            longitude: businessForm.longitude
-              ? Number(businessForm.longitude)
-              : undefined,
           },
         };
 
@@ -452,16 +449,29 @@ export default function DashboardSetupPage() {
 
     setIsSubmitting(true);
     try {
-      for (const loc of locations) {
+      for (let index = 0; index < locations.length; index++) {
+        const loc = locations[index];
+        const typesForLocation = locationFacilityTypes[index] || [];
         const payload: LocationPayload = {
           ...loc,
           client_id: clientId,
+          facility_types: typesForLocation.length ? typesForLocation : null,
         };
 
         if (loc.id) {
           await updateLocationApi(loc.id, payload);
         } else {
-          await createLocationApi(payload);
+          const createdLocation = await createLocationApi(payload);
+
+          if (typesForLocation.length > 0) {
+            for (const type of typesForLocation) {
+              await createFacilityAtLocationApi(createdLocation.id, {
+                name: `${createdLocation.name} - ${type}`,
+                type,
+                status: "active",
+              });
+            }
+          }
         }
       }
 
@@ -688,32 +698,6 @@ export default function DashboardSetupPage() {
                   handleBusinessChange("coverImageUrl", e.target.value)
                 }
               />
-              <Input
-                label="Latitude"
-                placeholder="Between -90 and 90"
-                type="number"
-                step="any"
-                min="-90"
-                max="90"
-                value={businessForm.latitude}
-                onChange={(e) =>
-                  handleBusinessChange("latitude", e.target.value)
-                }
-                error={step1Errors.fields.latitude ?? undefined}
-              />
-              <Input
-                label="Longitude"
-                placeholder="Between -180 and 180"
-                type="number"
-                step="any"
-                min="-180"
-                max="180"
-                value={businessForm.longitude}
-                onChange={(e) =>
-                  handleBusinessChange("longitude", e.target.value)
-                }
-                error={step1Errors.fields.longitude ?? undefined}
-              />
             </div>
             <Input
               label="Description"
@@ -881,6 +865,51 @@ export default function DashboardSetupPage() {
                         step2Errors.fields[`${index}.longitude`] ?? undefined
                       }
                     />
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="mb-2 text-xs font-medium text-text-secondary">
+                      Facility types for this location (optional)
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "gaming-pc", label: "Gaming — PC" },
+                        { value: "vr", label: "Gaming — VR" },
+                        { value: "ps5", label: "Gaming — PS5" },
+                        { value: "ps4", label: "Gaming — PS4" },
+                        { value: "xbox", label: "Gaming — XBOX" },
+                        { value: "snooker-table", label: "Snooker table" },
+                        {
+                          value: "table-tennis-table",
+                          label: "Table tennis table",
+                        },
+                        { value: "futsal-field", label: "Futsal field" },
+                        { value: "cricket-pitch", label: "Cricket pitch" },
+                        { value: "padel-court", label: "Padel court" },
+                      ].map((opt) => {
+                        const selectedForLocation =
+                          locationFacilityTypes[index] || [];
+                        const checked = selectedForLocation.includes(
+                          opt.value
+                        );
+                        return (
+                          <label
+                            key={opt.value}
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border-primary bg-surface px-3 py-1 text-xs text-text-secondary"
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-3 w-3 rounded border-border-primary text-primary focus:ring-primary"
+                              checked={checked}
+                              onChange={() =>
+                                toggleFacilityType(index, opt.value)
+                              }
+                            />
+                            <span>{opt.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Search, Bell, Moon, Sun, User } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import Button from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function Topbar() {
   const { theme, toggleTheme, mounted } = useTheme();
   const { user, logout } = useAuth();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border bg-surface shadow-sm">
@@ -48,15 +49,33 @@ export default function Topbar() {
           </Button>
 
           {/* User Menu */}
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="User menu"
-            onClick={logout}
-          >
-            <User className="h-4 w-4 mr-1" />
-            {user?.name || "Logout"}
-          </Button>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="User menu"
+              onClick={() => setIsUserMenuOpen((prev) => !prev)}
+            >
+              <User className="h-4 w-4 mr-1" />
+              {user?.name || "Account"}
+            </Button>
+
+            {isUserMenuOpen && (
+              <div className="absolute right-0 mt-2 w-40 rounded-md bg-surface border border-border shadow-lg py-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    logout();
+                  }}
+                >
+                  Logout
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

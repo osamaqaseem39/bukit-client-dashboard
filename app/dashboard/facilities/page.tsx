@@ -736,19 +736,71 @@ export default function FacilitiesPage() {
     [locations, selectedLocationId]
   );
 
+  const allowedTypesForSelectedLocation = useMemo(() => {
+    if (!selectedLocationId) return [] as string[];
+    if (selectedLocation?.facility_types && selectedLocation.facility_types.length) {
+      return selectedLocation.facility_types;
+    }
+    const types = new Set<string>();
+    for (const f of facilities) {
+      if (f.type) {
+        types.add(f.type);
+      }
+    }
+    return Array.from(types);
+  }, [selectedLocationId, selectedLocation, facilities]);
+
+  const availableGroupsForSelectedLocation = useMemo(() => {
+    if (allowedTypesForSelectedLocation.length === 0) {
+      return Object.keys(FACILITY_GROUP_LABELS) as FacilityGroup[];
+    }
+    const groups = new Set<FacilityGroup>();
+    for (const [groupKey, types] of Object.entries(FACILITY_GROUP_TO_TYPES)) {
+      if (types.some((t) => allowedTypesForSelectedLocation.includes(t))) {
+        groups.add(groupKey as FacilityGroup);
+      }
+    }
+    return Array.from(groups);
+  }, [allowedTypesForSelectedLocation]);
+
   function openCreateModal() {
     setEditingFacility(null);
-    const initialGroup: FacilityGroup = DEFAULT_FACILITY_GROUP;
-    const allowedTypes = getAllowedTypesForGroup(initialGroup);
-    const initialType = allowedTypes[0] ?? "other";
-    setFormGroup(initialGroup);
-    setFormData({
-      name: "",
-      type: initialType,
-      status: "active",
-      capacity: undefined,
-      metadata: {},
-    });
+
+    const locationTypes = allowedTypesForSelectedLocation;
+
+    if (locationTypes.length === 1) {
+      // Only one type allowed for this location – use it directly
+      setFormGroup(getGroupForType(locationTypes[0]));
+      setFormData({
+        name: "",
+        type: locationTypes[0],
+        status: "active",
+        capacity: undefined,
+        metadata: {},
+      });
+    } else {
+      // Multiple or zero allowed types – fall back to default group,
+      // but restrict to types also allowed for this location when possible.
+      const initialGroup: FacilityGroup =
+        (availableGroupsForSelectedLocation[0] as FacilityGroup) ||
+        DEFAULT_FACILITY_GROUP;
+      const baseAllowed = getAllowedTypesForGroup(initialGroup);
+      const intersect =
+        locationTypes.length > 0
+          ? baseAllowed.filter((t) => locationTypes.includes(t))
+          : baseAllowed;
+      const initialType = (intersect[0] ?? baseAllowed[0] ?? "other") as string;
+
+      setFormGroup(initialGroup);
+      setFormData({
+        name: "",
+        type: initialType,
+        status: "active",
+        capacity: undefined,
+        metadata: {},
+      });
+    }
+
     setIsModalOpen(true);
   }
 
@@ -903,60 +955,88 @@ export default function FacilitiesPage() {
               }
               placeholder="e.g. Gaming PC #1, Futsal Court A"
             />
-            <div>
-              <label className="mb-2 block text-sm font-medium text-text-primary">
-                Facility type *
-              </label>
-              <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                value={formGroup}
-                onChange={(e) => {
-                  const newGroup = e.target.value as FacilityGroup | "";
-                  setFormGroup(newGroup);
-                  setFormData((prev) => {
-                    if (!newGroup) {
-                      return prev;
+            {allowedTypesForSelectedLocation.length <= 1 ? (
+              <div>
+                <p className="text-sm font-medium text-text-primary">
+                  Facility type
+                </p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  {formatFacilityType(formData.type)}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-text-primary">
+                    Facility type *
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    value={formGroup}
+                    onChange={(e) => {
+                      const newGroup = e.target.value as FacilityGroup | "";
+                      setFormGroup(newGroup);
+                      setFormData((prev) => {
+                        if (!newGroup) {
+                          return prev;
+                        }
+                        const groupBase = getAllowedTypesForGroup(newGroup);
+                        const locationTypes = allowedTypesForSelectedLocation;
+                        const groupAllowed =
+                          locationTypes.length > 0
+                            ? groupBase.filter((t) =>
+                                locationTypes.includes(t)
+                              )
+                            : groupBase;
+                        const nextType = groupAllowed.includes(prev.type)
+                          ? prev.type
+                          : groupAllowed[0] ?? groupBase[0] ?? "other";
+                        return {
+                          ...prev,
+                          type: nextType,
+                        };
+                      });
+                    }}
+                  >
+                    <option value="">Select facility type…</option>
+                    {availableGroupsForSelectedLocation.map((value) => (
+                      <option key={value} value={value}>
+                        {FACILITY_GROUP_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-text-primary">
+                    Facility *
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    value={formData.type}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        type: e.target.value,
+                      }))
                     }
-                    const allowed = getAllowedTypesForGroup(newGroup);
-                    const nextType = allowed.includes(prev.type)
-                      ? prev.type
-                      : allowed[0] ?? "other";
-                    return {
-                      ...prev,
-                      type: nextType,
-                    };
-                  });
-                }}
-              >
-                <option value="">Select facility type…</option>
-                {Object.entries(FACILITY_GROUP_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-2 block text-sm font-medium text-text-primary">
-                Facility *
-              </label>
-              <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                value={formData.type}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    type: e.target.value,
-                  }))
-                }
-              >
-                {getAllowedTypesForGroup(formGroup).map((value) => (
-                  <option key={value} value={value}>
-                    {FACILITY_TYPE_LABELS[value] || value}
-                  </option>
-                ))}
-              </select>
-            </div>
+                  >
+                    {(() => {
+                      const base = getAllowedTypesForGroup(formGroup);
+                      const locationTypes = allowedTypesForSelectedLocation;
+                      const allowed =
+                        locationTypes.length > 0
+                          ? base.filter((t) => locationTypes.includes(t))
+                          : base;
+                      return allowed.map((value) => (
+                        <option key={value} value={value}>
+                          {FACILITY_TYPE_LABELS[value] || value}
+                        </option>
+                      ));
+                    })()}
+                  </select>
+                </div>
+              </>
+            )}
             <div>
               <label className="mb-2 block text-sm font-medium text-text-primary">
                 Status *
@@ -1213,37 +1293,65 @@ export default function FacilitiesPage() {
             Select location
           </h2>
           <p className="text-sm text-text-secondary">
-            Choose a location to view and add facilities. Facilities at this location will be available in the app for bookings.
+            Tap a location to manage its facilities. Facilities at this location will be available in the app for bookings.
           </p>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-text-secondary">
-                Location
-              </label>
-              <select
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                value={selectedLocationId}
-                onChange={(e) => setSelectedLocationId(e.target.value)}
-                disabled={locationsLoading}
-              >
-                <option value="">
-                  {locationsLoading ? "Loading…" : "Select a location"}
-                </option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}
-                    {loc.city || loc.address ? ` — ${loc.city || loc.address}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedLocationId && (
-              <Button onClick={openCreateModal}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add facility
-              </Button>
+          <div className="space-y-4">
+            {locationsLoading ? (
+              <div className="flex items-center justify-center py-6 text-sm text-text-secondary">
+                Loading locations…
+              </div>
+            ) : locations.length === 0 ? (
+              <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-text-secondary">
+                No locations found. Please create a location first in setup.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {locations.map((loc) => {
+                  const isSelected = loc.id === selectedLocationId;
+                  return (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => setSelectedLocationId(loc.id)}
+                      className={`flex flex-col items-start rounded-xl border px-4 py-3 text-left text-sm transition ${
+                        isSelected
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border bg-surface-elevated/60 hover:border-primary/60 hover:bg-surface-elevated"
+                      }`}
+                    >
+                      <div className="mb-1 flex w-full items-center justify-between gap-2">
+                        <span className="font-medium text-text-primary">
+                          {loc.name}
+                        </span>
+                        <span
+                          className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                            isSelected
+                              ? "border-primary bg-primary text-white"
+                              : "border-border bg-background text-transparent"
+                          } text-[10px] font-bold`}
+                        >
+                          ✓
+                        </span>
+                      </div>
+                      {(loc.city || loc.address) && (
+                        <span className="text-xs text-text-secondary">
+                          {loc.city || loc.address}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {selectedLocationId && allowedTypesForSelectedLocation.length === 0 && (
+              <div className="flex justify-end">
+                <Button onClick={openCreateModal}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add facility
+                </Button>
+              </div>
             )}
           </div>
         </CardContent>
@@ -1265,6 +1373,38 @@ export default function FacilitiesPage() {
 
       {selectedLocationId && (
         <>
+          {/* Quick add per facility type for this location */}
+          {allowedTypesForSelectedLocation.length > 0 && (
+            <Card>
+              <CardContent className="flex flex-wrap gap-2 pt-6">
+                {allowedTypesForSelectedLocation.map((type) => (
+                  <Button
+                    key={type}
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      (() => {
+                        setEditingFacility(null);
+                        setFormGroup(getGroupForType(type));
+                        setFormData({
+                          name: "",
+                          type,
+                          status: "active",
+                          capacity: undefined,
+                          metadata: {},
+                        });
+                        setIsModalOpen(true);
+                      })()
+                    }
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add {formatFacilityType(type)}
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Stats for this location */}
           <div className="grid gap-6 md:grid-cols-3">
             <Card>

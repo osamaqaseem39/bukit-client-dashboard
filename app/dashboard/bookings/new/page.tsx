@@ -276,29 +276,47 @@ export default function NewBookingPage() {
               </div>
             )}
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <Input
-                type="date"
-                label="Date *"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-              <Input
-                type="time"
-                label="Start time *"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
-              <Input
-                type="number"
-                label="Duration (minutes) *"
-                min={15}
-                step={15}
-                value={durationMinutes}
-                onChange={(e) =>
-                  setDurationMinutes(Number(e.target.value || 60))
-                }
-              />
+            <div className="space-y-3">
+              <div className="grid gap-4 md:grid-cols-3">
+                <Input
+                  type="date"
+                  label="Date *"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+                <Input
+                  type="time"
+                  label="Start time *"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+                <Input
+                  type="number"
+                  label="Duration (minutes) *"
+                  min={15}
+                  step={15}
+                  value={durationMinutes}
+                  onChange={(e) =>
+                    setDurationMinutes(Number(e.target.value || 60))
+                  }
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                  Quick add
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    setDurationMinutes((prev) => Math.max(0, prev + 30))
+                  }
+                >
+                  + 30 min
+                </Button>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
