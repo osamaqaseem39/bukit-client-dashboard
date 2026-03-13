@@ -338,6 +338,14 @@ export default function DashboardSetupPage() {
     return true;
   }
 
+  const GAMING_ZONE_CHILD_TYPES = [
+    "gaming-pc",
+    "vr",
+    "ps5",
+    "ps4",
+    "xbox",
+  ];
+
   const ARENA_CHILD_TYPES = ["futsal-field", "cricket-pitch", "padel-court"];
 
   function toggleFacilityType(index: number, type: string) {
@@ -345,19 +353,20 @@ export default function DashboardSetupPage() {
       const next = [...prev];
       const current = next[index] ?? [];
 
-      // When toggling Arena, map it to the underlying facility types
-      if (type === "arena") {
-        const hasAnyArenaChild = ARENA_CHILD_TYPES.some((t) =>
-          current.includes(t)
-        );
+      // When toggling Arena or Gaming Zone, map them to their underlying facility types
+      if (type === "arena" || type === "gaming-zone") {
+        const childTypes =
+          type === "arena" ? ARENA_CHILD_TYPES : GAMING_ZONE_CHILD_TYPES;
 
-        if (hasAnyArenaChild) {
-          // Turning Arena off: remove all arena child types
-          next[index] = current.filter((t) => !ARENA_CHILD_TYPES.includes(t));
+        const hasAnyChild = childTypes.some((t) => current.includes(t));
+
+        if (hasAnyChild) {
+          // Turning group off: remove all child types
+          next[index] = current.filter((t) => !childTypes.includes(t));
         } else {
-          // Turning Arena on: add all arena child types
+          // Turning group on: add all child types
           const updated = new Set(current);
-          ARENA_CHILD_TYPES.forEach((t) => updated.add(t));
+          childTypes.forEach((t) => updated.add(t));
           next[index] = Array.from(updated);
         }
 
@@ -895,19 +904,15 @@ export default function DashboardSetupPage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {[
-                        { value: "gaming-pc", label: "Gaming — PC" },
-                        { value: "vr", label: "Gaming — VR" },
-                        { value: "ps5", label: "Gaming — PS5" },
-                        { value: "ps4", label: "Gaming — PS4" },
-                        { value: "xbox", label: "Gaming — XBOX" },
-                        { value: "snooker-table", label: "Snooker table" },
-                        {
-                          value: "table-tennis-table",
-                          label: "Table tennis table",
-                        },
+                        { value: "gaming-zone", label: "Gaming Zone" },
                         {
                           value: "arena",
                           label: "Arena (Cricket, Futsal, Padel)",
+                        },
+                        { value: "snooker-table", label: "Snooker" },
+                        {
+                          value: "table-tennis-table",
+                          label: "Table Tennis",
                         },
                       ].map((opt) => {
                         const selectedForLocation =
@@ -916,6 +921,10 @@ export default function DashboardSetupPage() {
                         const checked =
                           opt.value === "arena"
                             ? ARENA_CHILD_TYPES.some((t) =>
+                                selectedForLocation.includes(t)
+                              )
+                            : opt.value === "gaming-zone"
+                            ? GAMING_ZONE_CHILD_TYPES.some((t) =>
                                 selectedForLocation.includes(t)
                               )
                             : selectedForLocation.includes(opt.value);

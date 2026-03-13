@@ -42,16 +42,16 @@ interface DynamicFieldConfig {
 }
 
 const FACILITY_TYPE_LABELS: Record<string, string> = {
-  "gaming-pc": "Gaming PC",
-  vr: "VR",
-  ps4: "PS4",
-  ps5: "PS5",
-  xbox: "XBOX",
-  "snooker-table": "Snooker Table",
-  "table-tennis-table": "Table Tennis Table",
-  "futsal-field": "Futsal Field",
-  "cricket-pitch": "Cricket Pitch",
-  "padel-court": "Padel Court",
+  "gaming-pc": "Gaming Zone",
+  vr: "Gaming Zone",
+  ps4: "Gaming Zone",
+  ps5: "Gaming Zone",
+  xbox: "Gaming Zone",
+  "snooker-table": "Snooker",
+  "table-tennis-table": "Table Tennis",
+  "futsal-field": "Arena",
+  "cricket-pitch": "Arena",
+  "padel-court": "Arena",
   other: "Other",
 };
 
