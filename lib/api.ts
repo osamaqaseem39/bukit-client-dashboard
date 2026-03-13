@@ -455,6 +455,7 @@ export interface ClientSummary {
   contact_name?: string | null;
   email?: string | null;
   phone?: string | null;
+  state?: string | null;
   city?: string | null;
   country?: string | null;
   status: "pending" | "approved" | "rejected" | "suspended" | "active";
