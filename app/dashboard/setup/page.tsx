@@ -338,10 +338,32 @@ export default function DashboardSetupPage() {
     return true;
   }
 
+  const ARENA_CHILD_TYPES = ["futsal-field", "cricket-pitch", "padel-court"];
+
   function toggleFacilityType(index: number, type: string) {
     setLocationFacilityTypes((prev) => {
       const next = [...prev];
       const current = next[index] ?? [];
+
+      // When toggling Arena, map it to the underlying facility types
+      if (type === "arena") {
+        const hasAnyArenaChild = ARENA_CHILD_TYPES.some((t) =>
+          current.includes(t)
+        );
+
+        if (hasAnyArenaChild) {
+          // Turning Arena off: remove all arena child types
+          next[index] = current.filter((t) => !ARENA_CHILD_TYPES.includes(t));
+        } else {
+          // Turning Arena on: add all arena child types
+          const updated = new Set(current);
+          ARENA_CHILD_TYPES.forEach((t) => updated.add(t));
+          next[index] = Array.from(updated);
+        }
+
+        return next;
+      }
+
       if (current.includes(type)) {
         next[index] = current.filter((t) => t !== type);
       } else {
@@ -883,15 +905,21 @@ export default function DashboardSetupPage() {
                           value: "table-tennis-table",
                           label: "Table tennis table",
                         },
-                        { value: "futsal-field", label: "Futsal field" },
-                        { value: "cricket-pitch", label: "Cricket pitch" },
-                        { value: "padel-court", label: "Padel court" },
+                        {
+                          value: "arena",
+                          label: "Arena (Cricket, Futsal, Padel)",
+                        },
                       ].map((opt) => {
                         const selectedForLocation =
                           locationFacilityTypes[index] || [];
-                        const checked = selectedForLocation.includes(
-                          opt.value
-                        );
+
+                        const checked =
+                          opt.value === "arena"
+                            ? ARENA_CHILD_TYPES.some((t) =>
+                                selectedForLocation.includes(t)
+                              )
+                            : selectedForLocation.includes(opt.value);
+
                         return (
                           <label
                             key={opt.value}

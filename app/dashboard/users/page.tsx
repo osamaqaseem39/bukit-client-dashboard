@@ -31,9 +31,7 @@ const ALL_MODULES: { key: DashboardModuleKey; label: string }[] = [
   { key: "gaming", label: "Gaming" },
   { key: "snooker", label: "Snooker" },
   { key: "table-tennis", label: "Table Tennis" },
-  { key: "cricket", label: "Cricket" },
-  { key: "futsal-turf", label: "Futsal Turf" },
-  { key: "padel", label: "Padel" },
+  { key: "arena", label: "Arena (Cricket, Futsal, Padel)" },
   { key: "locations", label: "Locations" },
   { key: "users", label: "Users" },
   { key: "bookings", label: "Bookings" },
@@ -111,14 +109,31 @@ export default function UsersPage() {
     user: AdminUserSummary,
     moduleKey: DashboardModuleKey
   ) {
-    const currentModules = user.modules && user.modules.length > 0
-      ? new Set<DashboardModuleKey>(user.modules)
-      : new Set<DashboardModuleKey>();
+    const rawModules = (user.modules?.filter(Boolean) ??
+      []) as DashboardModuleKey[];
 
-    if (currentModules.has(moduleKey)) {
-      currentModules.delete(moduleKey);
+    // Normalize any legacy sports modules into the unified Arena module
+    const currentModules = new Set<DashboardModuleKey>();
+    for (const mod of rawModules) {
+      if (mod === "cricket" || mod === "futsal-turf" || mod === "padel") {
+        currentModules.add("arena");
+      } else {
+        currentModules.add(mod);
+      }
+    }
+
+    if (moduleKey === "arena") {
+      if (currentModules.has("arena")) {
+        currentModules.delete("arena");
+      } else {
+        currentModules.add("arena");
+      }
     } else {
-      currentModules.add(moduleKey);
+      if (currentModules.has(moduleKey)) {
+        currentModules.delete(moduleKey);
+      } else {
+        currentModules.add(moduleKey);
+      }
     }
 
     const nextModules =
