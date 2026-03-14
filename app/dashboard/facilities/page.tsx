@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
+import { Loader2, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -26,18 +26,45 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
-type FacilityType =
-  | "gaming"
-  | "snooker"
-  | "table-tennis"
-  | "arena"
-  | "other";
+/** Backend facility types – used for type-specific fields and metadata. */
+const FACILITY_TYPES = [
+  { value: "gaming-pc", label: "Gaming PC" },
+  { value: "ps4", label: "PS4" },
+  { value: "ps5", label: "PS5" },
+  { value: "xbox", label: "Xbox" },
+  { value: "snooker-table", label: "Snooker Table" },
+  { value: "table-tennis-table", label: "Table Tennis Table" },
+  { value: "futsal-field", label: "Futsal Field" },
+  { value: "cricket-pitch", label: "Cricket Pitch" },
+  { value: "padel-court", label: "Padel Court" },
+  { value: "other", label: "Other" },
+] as const;
+
+type FacilityTypeValue = (typeof FACILITY_TYPES)[number]["value"];
+
+interface PcEntry {
+  label: string;
+  cpu: string;
+  gpu: string;
+  ram: string;
+  refreshRate: string;
+}
+
+interface StationEntry {
+  label: string;
+}
 
 interface FacilityFormState {
   name: string;
-  type: FacilityType;
+  type: FacilityTypeValue;
   status: FacilityStatus;
   capacity: number | null;
+  /** For gaming-pc */
+  pcs: PcEntry[];
+  /** For ps4 / ps5 / xbox */
+  stations: StationEntry[];
+  screenSizeInches: string;
+  gamesAvailable: string;
 }
 
 export default function FacilitiesPage() {
@@ -56,9 +83,13 @@ export default function FacilitiesPage() {
   const [showForm, setShowForm] = useState(false);
   const [formState, setFormState] = useState<FacilityFormState>({
     name: "",
-    type: "gaming",
+    type: "gaming-pc",
     status: "active",
     capacity: null,
+    pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
+    stations: [{ label: "Station 1" }],
+    screenSizeInches: "",
+    gamesAvailable: "",
   });
 
   useEffect(() => {
@@ -106,21 +137,49 @@ export default function FacilitiesPage() {
     setEditingFacility(null);
     setFormState({
       name: "",
-      type: "gaming",
+      type: "gaming-pc",
       status: "active",
       capacity: null,
+      pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
+      stations: [{ label: "Station 1" }],
+      screenSizeInches: "",
+      gamesAvailable: "",
     });
     setShowForm(true);
   }
 
   function openEditForm(facility: Facility) {
     setEditingFacility(facility);
+    const meta = (facility.metadata || {}) as Record<string, any>;
+    const pcsRaw = Array.isArray(meta.pcs) ? meta.pcs : [];
+    const pcs: PcEntry[] =
+      pcsRaw.length > 0
+        ? pcsRaw.map((pc: any) => ({
+            label: pc.label ?? "",
+            cpu: pc.cpu ?? "",
+            gpu: pc.gpu ?? "",
+            ram: pc.ram ?? "",
+            refreshRate: pc.refresh_rate_hz != null ? String(pc.refresh_rate_hz) : "",
+          }))
+        : [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }];
+    const stationsRaw = Array.isArray(meta.stations) ? meta.stations : [];
+    const stations: StationEntry[] =
+      stationsRaw.length > 0
+        ? stationsRaw.map((s: any) => ({
+            label: typeof s === "string" ? s : s?.label ?? "",
+          }))
+        : [{ label: "Station 1" }];
     setFormState({
       name: facility.name,
-      type: (facility.type as FacilityType) || "gaming",
+      type: (facility.type as FacilityTypeValue) || "gaming-pc",
       status: facility.status,
       capacity:
         typeof facility.capacity === "number" ? facility.capacity : null,
+      pcs,
+      stations,
+      screenSizeInches:
+        meta.screen_size_inches != null ? String(meta.screen_size_inches) : "",
+      gamesAvailable: meta.games_available ?? "",
     });
     setShowForm(true);
   }
@@ -128,6 +187,55 @@ export default function FacilitiesPage() {
   function closeForm() {
     setShowForm(false);
     setEditingFacility(null);
+  }
+
+  function buildMetadata(): Record<string, any> | undefined {
+    const { type, pcs, stations, screenSizeInches, gamesAvailable } =
+      formState;
+    const meta: Record<string, any> = {};
+
+    if (type === "gaming-pc" && pcs.length > 0) {
+      const list = pcs
+        .map((pc) => {
+          const label = (pc.label || "").trim();
+          const cpu = (pc.cpu || "").trim();
+          const gpu = (pc.gpu || "").trim();
+          const ram = (pc.ram || "").trim();
+          const refreshStr = (pc.refreshRate || "").trim();
+          if (!label && !cpu && !gpu && !ram && !refreshStr) return null;
+          const refresh_rate_hz = refreshStr ? Number(refreshStr) : undefined;
+          return {
+            label: label || undefined,
+            cpu: cpu || undefined,
+            gpu: gpu || undefined,
+            ram: ram || undefined,
+            refresh_rate_hz:
+              refresh_rate_hz != null && !Number.isNaN(refresh_rate_hz)
+                ? refresh_rate_hz
+                : undefined,
+          };
+        })
+        .filter(Boolean);
+      if (list.length) meta.pcs = list;
+    }
+
+    if (
+      (type === "ps4" || type === "ps5" || type === "xbox") &&
+      stations.length > 0
+    ) {
+      const list = stations
+        .map((s) => (s.label || "").trim())
+        .filter(Boolean);
+      if (list.length) meta.stations = list;
+      const screenNum = screenSizeInches.trim()
+        ? Number(screenSizeInches)
+        : undefined;
+      if (screenNum != null && !Number.isNaN(screenNum))
+        meta.screen_size_inches = screenNum;
+      if ((gamesAvailable || "").trim()) meta.games_available = gamesAvailable.trim();
+    }
+
+    return Object.keys(meta).length ? meta : undefined;
   }
 
   async function handleSave() {
@@ -153,7 +261,7 @@ export default function FacilitiesPage() {
           formState.capacity !== null && !Number.isNaN(formState.capacity)
             ? formState.capacity
             : undefined,
-        metadata: {},
+        metadata: buildMetadata(),
       };
 
       if (editingFacility) {
@@ -384,23 +492,47 @@ export default function FacilitiesPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-text-secondary">
-                    Type
+                    Facility type
                   </label>
                   <select
                     className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
                     value={formState.type}
-                    onChange={(e) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        type: e.target.value as FacilityType,
-                      }))
-                    }
+                    onChange={(e) => {
+                      const newType = e.target.value as FacilityTypeValue;
+                      setFormState((prev) => {
+                        const next = { ...prev, type: newType };
+                        if (newType === "gaming-pc" && prev.type !== "gaming-pc") {
+                          next.pcs =
+                            prev.pcs?.length > 0
+                              ? prev.pcs
+                              : [
+                                  {
+                                    label: "PC 1",
+                                    cpu: "",
+                                    gpu: "",
+                                    ram: "",
+                                    refreshRate: "",
+                                  },
+                                ];
+                        }
+                        if (
+                          (newType === "ps4" || newType === "ps5" || newType === "xbox") &&
+                          prev.type !== "ps4" && prev.type !== "ps5" && prev.type !== "xbox"
+                        ) {
+                          next.stations =
+                            prev.stations?.length > 0
+                              ? prev.stations
+                              : [{ label: "Station 1" }];
+                        }
+                        return next;
+                      });
+                    }}
                   >
-                    <option value="gaming">Gaming</option>
-                    <option value="snooker">Snooker</option>
-                    <option value="table-tennis">Table Tennis</option>
-                    <option value="arena">Arena</option>
-                    <option value="other">Other</option>
+                    {FACILITY_TYPES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -423,8 +555,216 @@ export default function FacilitiesPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Type-specific: Gaming PC – list of PCs */}
+              {formState.type === "gaming-pc" && (
+                <div className="space-y-3 rounded-lg border border-border bg-surface/50 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-text-primary">
+                      PC units &amp; specs
+                    </span>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          pcs: [
+                            ...prev.pcs,
+                            {
+                              label: `PC ${prev.pcs.length + 1}`,
+                              cpu: "",
+                              gpu: "",
+                              ram: "",
+                              refreshRate: "",
+                            },
+                          ],
+                        }))
+                      }
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add PC
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {formState.pcs.map((pc, index) => (
+                      <div
+                        key={index}
+                        className="grid gap-2 rounded-md border border-border bg-white p-3 md:grid-cols-5"
+                      >
+                        <Input
+                          label="Label"
+                          placeholder={`PC ${index + 1}`}
+                          value={pc.label}
+                          onChange={(e) => {
+                            const pcs = [...formState.pcs];
+                            pcs[index] = { ...pcs[index], label: e.target.value };
+                            setFormState((prev) => ({ ...prev, pcs }));
+                          }}
+                        />
+                        <Input
+                          label="CPU"
+                          placeholder="e.g. i5 / i7"
+                          value={pc.cpu}
+                          onChange={(e) => {
+                            const pcs = [...formState.pcs];
+                            pcs[index] = { ...pcs[index], cpu: e.target.value };
+                            setFormState((prev) => ({ ...prev, pcs }));
+                          }}
+                        />
+                        <Input
+                          label="GPU"
+                          placeholder="e.g. GTX 1660"
+                          value={pc.gpu}
+                          onChange={(e) => {
+                            const pcs = [...formState.pcs];
+                            pcs[index] = { ...pcs[index], gpu: e.target.value };
+                            setFormState((prev) => ({ ...prev, pcs }));
+                          }}
+                        />
+                        <Input
+                          label="RAM"
+                          placeholder="e.g. 16GB"
+                          value={pc.ram}
+                          onChange={(e) => {
+                            const pcs = [...formState.pcs];
+                            pcs[index] = { ...pcs[index], ram: e.target.value };
+                            setFormState((prev) => ({ ...prev, pcs }));
+                          }}
+                        />
+                        <div className="flex items-end gap-2">
+                          <Input
+                            label="Refresh (Hz)"
+                            type="number"
+                            placeholder="144"
+                            value={pc.refreshRate}
+                            onChange={(e) => {
+                              const pcs = [...formState.pcs];
+                              pcs[index] = {
+                                ...pcs[index],
+                                refreshRate: e.target.value,
+                              };
+                              setFormState((prev) => ({ ...prev, pcs }));
+                            }}
+                          />
+                          {formState.pcs.length > 1 && (
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface hover:text-text-primary"
+                              onClick={() => {
+                                const pcs = formState.pcs.filter((_, i) => i !== index);
+                                setFormState((prev) => ({ ...prev, pcs }));
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Type-specific: PS4 / PS5 / Xbox – stations + optional screen & games */}
+              {(formState.type === "ps4" ||
+                formState.type === "ps5" ||
+                formState.type === "xbox") && (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Input
+                      label="Screen size (inches)"
+                      type="number"
+                      placeholder="e.g. 32"
+                      value={formState.screenSizeInches}
+                      onChange={(e) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          screenSizeInches: e.target.value,
+                        }))
+                      }
+                    />
+                    <Input
+                      label="Games available"
+                      placeholder="e.g. FIFA, COD, GTA"
+                      value={formState.gamesAvailable}
+                      onChange={(e) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          gamesAvailable: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-3 rounded-lg border border-border bg-surface/50 p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-text-primary">
+                        Stations / consoles
+                      </span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            stations: [
+                              ...prev.stations,
+                              {
+                                label: `Station ${prev.stations.length + 1}`,
+                              },
+                            ],
+                          }))
+                        }
+                      >
+                        <Plus className="mr-1 h-3 w-3" />
+                        Add station
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {formState.stations.map((station, index) => (
+                        <div
+                          key={index}
+                          className="flex gap-2 rounded-md border border-border bg-white p-2"
+                        >
+                          <Input
+                            label="Label"
+                            placeholder={`Station ${index + 1}`}
+                            value={station.label}
+                            onChange={(e) => {
+                              const stations = [...formState.stations];
+                              stations[index] = {
+                                ...stations[index],
+                                label: e.target.value,
+                              };
+                              setFormState((prev) => ({ ...prev, stations }));
+                            }}
+                            className="flex-1"
+                          />
+                          {formState.stations.length > 1 && (
+                            <button
+                              type="button"
+                              className="mt-6 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface hover:text-text-primary"
+                              onClick={() => {
+                                const stations = formState.stations.filter(
+                                  (_, i) => i !== index
+                                );
+                                setFormState((prev) => ({ ...prev, stations }));
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <Input
-                label="Capacity"
+                label="Capacity (optional)"
                 type="number"
                 value={
                   formState.capacity !== null ? String(formState.capacity) : ""
