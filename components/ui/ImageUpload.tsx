@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { uploadImageApi } from "@/lib/api";
 import Button from "./Button";
+import { Upload, Trash2 } from "lucide-react";
 
 type ImageUploadVariant = "logo" | "cover" | "default";
 
@@ -20,6 +21,7 @@ export default function ImageUpload({
   onChange,
   variant = "default",
 }: ImageUploadProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +40,14 @@ export default function ImageUpload({
       setError(err.message || "Failed to upload image");
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
+  };
+
+  const handleRemove = () => {
+    onChange("");
+    setError(null);
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   const previewClass =
@@ -65,15 +74,43 @@ export default function ImageUpload({
           />
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <input
+          ref={inputRef}
           type="file"
           accept="image/*"
           onChange={handleFileChange}
-          className="text-xs"
+          className="sr-only"
+          aria-label="Choose image file"
         />
-        {uploading && (
-          <span className="text-xs text-text-secondary">Uploading...</span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          {uploading ? (
+            <>Uploading...</>
+          ) : (
+            <>
+              <Upload className="mr-1.5 h-4 w-4" />
+              Choose file
+            </>
+          )}
+        </Button>
+        {value && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={uploading}
+            onClick={handleRemove}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            Remove
+          </Button>
         )}
       </div>
       {error && (
