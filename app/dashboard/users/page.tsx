@@ -17,32 +17,23 @@ import Modal from "@/components/ui/Modal";
 import {
   AdminUserSummary,
   DashboardModuleKey,
+  DASHBOARD_MODULES,
   getUsersApi,
   updateUserModulesApi,
   createUserApi,
   updateUserRoleApi,
+  getLocationsApi,
   CreateUserPayload,
   UpdateUserRolePayload,
+  Location,
 } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
-const ALL_MODULES: { key: DashboardModuleKey; label: string }[] = [
-  { key: "dashboard-overview", label: "Dashboard overview" },
-  { key: "gaming", label: "Gaming" },
-  { key: "snooker", label: "Snooker" },
-  { key: "table-tennis", label: "Table Tennis" },
-  { key: "arena", label: "Arena (Cricket, Futsal, Padel)" },
-  { key: "locations", label: "Locations" },
-  { key: "users", label: "Users" },
-  { key: "bookings", label: "Bookings" },
-  { key: "analytics", label: "Analytics" },
-  { key: "settings", label: "Settings" },
-];
-
-const ROLES: { value: "super_admin" | "admin" | "client" | "user"; label: string }[] = [
+const ROLES: { value: "super_admin" | "admin" | "client" | "user" | "location_manager"; label: string }[] = [
   { value: "super_admin", label: "Super Admin" },
   { value: "admin", label: "Admin" },
   { value: "client", label: "Client Admin" },
+  { value: "location_manager", label: "Location Manager" },
   { value: "user", label: "User" },
 ];
 
@@ -54,6 +45,7 @@ export default function UsersPage() {
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUserSummary | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [createForm, setCreateForm] = useState<CreateUserPayload>({
     name: "",
     email: "",
@@ -63,6 +55,7 @@ export default function UsersPage() {
   const [editForm, setEditForm] = useState<UpdateUserRolePayload>({
     role: undefined,
     modules: null,
+    managed_location_id: null,
   });
 
   useEffect(() => {
@@ -89,13 +82,29 @@ export default function UsersPage() {
     };
   }, []);
 
+  // Load locations for client (for location manager role dropdown)
+  useEffect(() => {
+    if (!isClient()) return;
+    let isMounted = true;
+    getLocationsApi()
+      .then((data) => {
+        if (!isMounted) return;
+        setLocations(data);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [isClient]);
+
   const totalUsers = users.length;
   const superAdmins = users.filter((u) => u.role === "super_admin").length;
   const admins = users.filter((u) => u.role === "admin").length;
   const clients = users.filter((u) => u.role === "client").length;
+  const locationManagers = users.filter((u) => u.role === "location_manager").length;
   const regularUsers = users.filter((u) => u.role === "user").length;
 
-  // Client admin can only create users, not admins
+  // Client admin can only create users and location managers, not admins
   const canCreateUsers = isSuperAdmin() || isAdmin() || isClient();
   const availableRoles = isSuperAdmin()
     ? ROLES
@@ -105,14 +114,18 @@ export default function UsersPage() {
     ? ROLES.filter((r) => r.value !== "super_admin" && r.value !== "admin")
     : [];
 
+  const locationMap = new Map(locations.map((l) => [l.id, l]));
+
   async function handleToggleModule(
     user: AdminUserSummary,
     moduleKey: DashboardModuleKey
   ) {
+    // API may return legacy module keys (cricket, futsal-turf, padel) that we normalize to "arena"
+    const legacyArenaKeys = ["cricket", "futsal-turf", "padel"] as const;
+    type LegacyArenaKey = (typeof legacyArenaKeys)[number];
     const rawModules = (user.modules?.filter(Boolean) ??
-      []) as DashboardModuleKey[];
+      []) as (DashboardModuleKey | LegacyArenaKey)[];
 
-    // Normalize any legacy sports modules into the unified Arena module
     const currentModules = new Set<DashboardModuleKey>();
     for (const mod of rawModules) {
       if (mod === "cricket" || mod === "futsal-turf" || mod === "padel") {
@@ -159,12 +172,20 @@ export default function UsersPage() {
       setError("Name, email, and password are required");
       return;
     }
+    if (createForm.role === "location_manager" && !createForm.managed_location_id) {
+      setError("Please select a location for the Location manager");
+      return;
+    }
 
     setSavingUserId("new");
     setError(null);
 
     try {
-      const newUser = await createUserApi(createForm);
+      const payload: CreateUserPayload = {
+        ...createForm,
+        managed_location_id: createForm.role === "location_manager" ? createForm.managed_location_id ?? undefined : undefined,
+      };
+      const newUser = await createUserApi(payload);
       setUsers((prev) => [...prev, newUser]);
       setIsCreateModalOpen(false);
       setCreateForm({ name: "", email: "", password: "", role: "user" });
@@ -180,16 +201,21 @@ export default function UsersPage() {
     setEditForm({
       role: user.role,
       modules: user.modules || null,
+      managed_location_id: user.managed_location_id ?? null,
     });
   }
 
   function closeEditModal() {
     setEditingUser(null);
-    setEditForm({ role: undefined, modules: null });
+    setEditForm({ role: undefined, modules: null, managed_location_id: null });
   }
 
   async function handleUpdateRole() {
     if (!editingUser) return;
+    if (isClient() && editForm.role === "location_manager" && !editForm.managed_location_id) {
+      setError("Please select a location for the Location manager");
+      return;
+    }
 
     setSavingUserId(editingUser.id);
     setError(null);
@@ -302,6 +328,22 @@ export default function UsersPage() {
             </div>
           </CardContent>
         </Card>
+        {(isSuperAdmin() || isAdmin() || isClient()) && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-text-secondary">
+                    Location Managers
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold text-text-primary">
+                    {loading ? "—" : locationManagers}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -354,6 +396,7 @@ export default function UsersPage() {
                     <TableHead>User</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    {isClient() && <TableHead>Location</TableHead>}
                     {isSuperAdmin() && <TableHead>Domain</TableHead>}
                     <TableHead className="min-w-[360px]">
                       Modules
@@ -378,6 +421,13 @@ export default function UsersPage() {
                             {user.role.replace("_", " ")}
                           </span>
                         </TableCell>
+                        {isClient() && (
+                          <TableCell className="text-sm text-text-secondary">
+                            {user.role === "location_manager" && user.managed_location_id
+                              ? locationMap.get(user.managed_location_id)?.name ?? user.managed_location_id
+                              : "—"}
+                          </TableCell>
+                        )}
                         {isSuperAdmin() && (
                           <TableCell className="text-sm text-text-secondary">
                             {user.client_id ? "Client Domain" : "Platform"}
@@ -385,7 +435,7 @@ export default function UsersPage() {
                         )}
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
-                            {ALL_MODULES.map((mod) => {
+                            {DASHBOARD_MODULES.map((mod) => {
                               const checked = activeModules.has(mod.key);
                               const disabled = savingUserId === user.id;
 
@@ -483,7 +533,8 @@ export default function UsersPage() {
               onChange={(e) =>
                 setCreateForm((prev) => ({
                   ...prev,
-                  role: e.target.value as any,
+                  role: e.target.value as CreateUserPayload["role"],
+                  managed_location_id: e.target.value === "location_manager" ? prev.managed_location_id : undefined,
                 }))
               }
               className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
@@ -495,6 +546,33 @@ export default function UsersPage() {
               ))}
             </select>
           </div>
+          {createForm.role === "location_manager" && isClient() && (
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-2">
+                Assigned Location *
+              </label>
+              <select
+                value={createForm.managed_location_id ?? ""}
+                onChange={(e) =>
+                  setCreateForm((prev) => ({
+                    ...prev,
+                    managed_location_id: e.target.value || undefined,
+                  }))
+                }
+                className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Select location</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-text-secondary">
+                This user will only see and manage the selected location.
+              </p>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-4">
             <Button
               variant="secondary"
@@ -537,7 +615,8 @@ export default function UsersPage() {
                 onChange={(e) =>
                   setEditForm((prev) => ({
                     ...prev,
-                    role: e.target.value as any,
+                    role: e.target.value as UpdateUserRolePayload["role"],
+                    managed_location_id: e.target.value === "location_manager" ? prev.managed_location_id : null,
                   }))
                 }
                 className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
@@ -549,12 +628,36 @@ export default function UsersPage() {
                 ))}
               </select>
             </div>
+            {editForm.role === "location_manager" && isClient() && (
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-2">
+                  Assigned Location *
+                </label>
+                <select
+                  value={editForm.managed_location_id ?? ""}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      managed_location_id: e.target.value || null,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select location</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-text-primary mb-2">
                 Modules
               </label>
               <div className="flex flex-wrap gap-2">
-                {ALL_MODULES.map((mod) => {
+                {DASHBOARD_MODULES.map((mod) => {
                   const checked =
                     editForm.modules?.includes(mod.key) ?? false;
                   return (

@@ -13,21 +13,8 @@ import {
   updateClientApi,
   UpdateClientPayload,
   ClientDetail,
-  DashboardModuleKey,
+  DASHBOARD_MODULES,
 } from "@/lib/api";
-
-const ALL_MODULES: { key: DashboardModuleKey; label: string }[] = [
-  { key: "dashboard-overview", label: "Dashboard overview" },
-  { key: "gaming", label: "Gaming" },
-  { key: "snooker", label: "Snooker" },
-  { key: "table-tennis", label: "Table Tennis" },
-  { key: "arena", label: "Arena (Cricket, Futsal, Padel)" },
-  { key: "locations", label: "Locations" },
-  { key: "users", label: "Users" },
-  { key: "bookings", label: "Bookings" },
-  { key: "analytics", label: "Analytics" },
-  { key: "settings", label: "Settings" },
-];
 
 export default function SettingsPage() {
   const { user, isClient, isSuperAdmin, isAdmin } = useAuth();
@@ -400,13 +387,13 @@ export default function SettingsPage() {
             </label>
             <p className="text-xs text-text-secondary mb-3">
               {user?.modules && user.modules.length > 0
-                ? "You have custom module access configured:"
-                : "You are using role-based default modules:"}
+                ? "You have custom module access configured (these control which sidebar sections you see):"
+                : "You are using role-based default modules. To change which sections appear, use Users management."}
             </p>
             <div className="flex flex-wrap gap-2">
               {user?.modules && user.modules.length > 0
                 ? user.modules.map((moduleKey) => {
-                    const module = ALL_MODULES.find((m) => m.key === moduleKey);
+                    const module = DASHBOARD_MODULES.find((m) => m.key === moduleKey);
                     return module ? (
                       <span
                         key={moduleKey}
@@ -416,7 +403,7 @@ export default function SettingsPage() {
                       </span>
                     ) : null;
                   })
-                : ALL_MODULES.map((module) => {
+                : DASHBOARD_MODULES.map((module) => {
                     // Show default modules based on role
                     const hasAccess =
                       (isSuperAdmin() || isAdmin()) ||

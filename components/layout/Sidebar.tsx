@@ -32,7 +32,7 @@ interface NavItem {
    * Optional roles that are allowed to see this item.
    * If omitted, the item is available to all roles (subject to modules).
    */
-  roles?: Array<"super_admin" | "admin" | "client" | "user">;
+  roles?: Array<"super_admin" | "admin" | "client" | "user" | "location_manager">;
   /**
    * Optional dashboard module key required for this item.
    * If provided and the logged-in user has a non-empty modules list,
@@ -92,14 +92,14 @@ const navItems: NavItem[] = [
     label: "Locations",
     href: "/dashboard/locations",
     icon: <MapPin className="h-5 w-5" />,
-    roles: ["admin", "client"],
+    roles: ["admin", "client", "location_manager"],
     moduleKey: "locations",
   },
   {
     label: "Facilities",
     href: "/dashboard/facilities",
     icon: <Building2 className="h-5 w-5" />,
-    roles: ["client"],
+    roles: ["client", "location_manager"],
     // No moduleKey yet so it's available to all client users;
     // can be module-gated later when backend exposes a facilities module key.
   },
@@ -114,14 +114,14 @@ const navItems: NavItem[] = [
     label: "Bookings",
     href: "/dashboard/bookings",
     icon: <Calendar className="h-5 w-5" />,
-    roles: ["admin", "client"],
+    roles: ["admin", "client", "location_manager"],
     moduleKey: "bookings",
   },
   {
     label: "Ledger",
     href: "/dashboard/ledger",
     icon: <Table2 className="h-5 w-5" />,
-    roles: ["client"],
+    roles: ["client", "location_manager"],
   },
   {
     label: "Analytics",
@@ -134,7 +134,7 @@ const navItems: NavItem[] = [
     label: "Settings",
     href: "/dashboard/settings",
     icon: <Settings className="h-5 w-5" />,
-    roles: ["admin", "client", "user"],
+    roles: ["admin", "client", "user", "location_manager"],
     moduleKey: "settings",
   },
 ];
@@ -158,9 +158,8 @@ export default function Sidebar() {
     if (!user) return navItems;
 
     // For client dashboard users, show a curated set of items in a specific order:
-    // - Top: Dashboard, Analytics, Bookings
-    // - Middle: Ledger
-    // - Bottom: Locations, Facilities, Settings
+    // - Top: Dashboard, Analytics, Bookings, Ledger
+    // - Bottom (pinned): Locations, Facilities, Settings
     if (user.role === "client") {
       const clientOrder = [
         "Dashboard",
@@ -180,6 +179,16 @@ export default function Sidebar() {
     // For other roles (admin, super_admin, user) keep existing behavior.
     return navItems;
   }, [user]);
+
+  const clientBottomLabels = ["Locations", "Facilities", "Settings"];
+  const { topItems, bottomItems } = useMemo(() => {
+    if (!user || user.role !== "client") {
+      return { topItems: visibleNavItems, bottomItems: [] as NavItem[] };
+    }
+    const top = visibleNavItems.filter((item) => !clientBottomLabels.includes(item.label));
+    const bottom = visibleNavItems.filter((item) => clientBottomLabels.includes(item.label));
+    return { topItems: top, bottomItems: bottom };
+  }, [user, visibleNavItems]);
 
   useEffect(() => {
     const checkDesktop = () => {
@@ -240,10 +249,10 @@ export default function Sidebar() {
             )}
           </div>
 
-          {/* Navigation */}
+          {/* Navigation (top items; scrollable for client) */}
           <nav className="flex-1 overflow-y-auto px-4 py-6">
             <ul className="space-y-1">
-              {visibleNavItems.map((item) => {
+              {topItems.map((item) => {
                 const isActive = pathname === item.href;
 
                 // Super admin can see everything
@@ -284,6 +293,43 @@ export default function Sidebar() {
               })}
             </ul>
           </nav>
+
+          {/* Bottom nav: Locations, Facilities, Settings (client dashboard only) */}
+          {bottomItems.length > 0 && (
+            <div className="border-t border-border px-4 py-4">
+              <ul className="space-y-1">
+                {bottomItems.map((item) => {
+                  const isActive = pathname === item.href;
+                  const isSuperAdmin = user?.role === "super_admin";
+                  if (!isSuperAdmin && item.roles && user && !item.roles.includes(user.role)) return null;
+                  if (
+                    !isSuperAdmin &&
+                    effectiveModules &&
+                    item.moduleKey &&
+                    !effectiveModules.includes(item.moduleKey)
+                  )
+                    return null;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={() => setIsMobileOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-primary text-white"
+                            : "text-text-secondary hover:bg-[rgb(var(--bg))] hover:text-text-primary"
+                        )}
+                      >
+                        {item.icon}
+                        {item.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="border-t border-border p-4">

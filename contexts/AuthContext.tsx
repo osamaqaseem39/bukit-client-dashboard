@@ -19,7 +19,7 @@ import {
   logoutApi,
 } from "@/lib/api";
 
-type UserRole = "super_admin" | "admin" | "client" | "user";
+type UserRole = "super_admin" | "admin" | "client" | "user" | "location_manager";
 
 interface User {
   id: string;
@@ -30,6 +30,10 @@ interface User {
    * Optional client_id for users that belong to a client admin's domain.
    */
   client_id?: string | null;
+  /**
+   * When role is location_manager, the single location this user manages.
+   */
+  managed_location_id?: string | null;
   /**
    * Optional list of dashboard modules this user is allowed to see.
    *

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -10,15 +10,70 @@ import {
   getFacilitiesByLocationApi,
 } from "@/lib/api";
 import type { Location, Facility } from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
+
+/** One bookable unit: either the whole facility or a sub-unit (e.g. PC 1, PC 2). */
+export interface BookableUnit {
+  facilityId: string;
+  locationId: string;
+  unitIndex: number;
+  label: string;
+  facilityName: string;
+  facilityType: string;
+}
+
+function getUnitsFromFacility(facility: Facility): BookableUnit[] {
+  const meta = facility.metadata as Record<string, any> | undefined;
+  if (facility.type === "gaming-pc" && meta?.pcs && Array.isArray(meta.pcs)) {
+    return meta.pcs.map((pc: any, index: number) => ({
+      facilityId: facility.id,
+      locationId: facility.location_id,
+      unitIndex: index,
+      label: pc.label || `PC ${index + 1}`,
+      facilityName: facility.name,
+      facilityType: facility.type,
+    }));
+  }
+  if (
+    (facility.type === "ps4" || facility.type === "ps5" || facility.type === "xbox") &&
+    meta?.stations &&
+    Array.isArray(meta.stations)
+  ) {
+    return meta.stations.map((s: any, index: number) => ({
+      facilityId: facility.id,
+      locationId: facility.location_id,
+      unitIndex: index,
+      label: typeof s === "string" ? s : s?.label || `${facility.type} ${index + 1}`,
+      facilityName: facility.name,
+      facilityType: facility.type,
+    }));
+  }
+  return [
+    {
+      facilityId: facility.id,
+      locationId: facility.location_id,
+      unitIndex: 0,
+      label: facility.name,
+      facilityName: facility.name,
+      facilityType: facility.type,
+    },
+  ];
+}
+
+function unitKey(unit: BookableUnit): string {
+  return `${unit.facilityId}:${unit.unitIndex}`;
+}
 
 export default function NewBookingPage() {
   const router = useRouter();
   const [locations, setLocations] = useState<Location[]>([]);
-  const [facilities, setFacilities] = useState<Facility[]>([]);
-  const [locationId, setLocationId] = useState<string>("");
-  const [facilityId, setFacilityId] = useState<string>("");
+  const [facilitiesByLocation, setFacilitiesByLocation] = useState<
+    Record<string, Facility[]>
+  >({});
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [selectedFacilityIds, setSelectedFacilityIds] = useState<string[]>([]);
+  const [selectedUnitKeys, setSelectedUnitKeys] = useState<string[]>([]);
   const [date, setDate] = useState<string>(() => {
     const today = new Date();
     return today.toISOString().slice(0, 10);
@@ -32,8 +87,6 @@ export default function NewBookingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  const selectedFacility = facilities.find((f) => f.id === facilityId);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,9 +102,7 @@ export default function NewBookingPage() {
           setError(err.message || "Failed to load locations");
         }
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     }
     load();
@@ -63,23 +114,76 @@ export default function NewBookingPage() {
   useEffect(() => {
     let isMounted = true;
     async function loadFacilities() {
-      if (!locationId) {
-        setFacilities([]);
+      if (selectedLocationIds.length === 0) {
+        setFacilitiesByLocation({});
+        setSelectedFacilityIds([]);
+        setSelectedUnitKeys([]);
         return;
       }
+      const next: Record<string, Facility[]> = {};
       try {
-        const list = await getFacilitiesByLocationApi(locationId);
-        if (!isMounted) return;
-        setFacilities(list);
+        await Promise.all(
+          selectedLocationIds.map(async (locId) => {
+            const list = await getFacilitiesByLocationApi(locId);
+            if (isMounted) next[locId] = list;
+          })
+        );
+        if (isMounted) {
+          setFacilitiesByLocation(next);
+          setSelectedFacilityIds([]);
+          setSelectedUnitKeys([]);
+        }
       } catch {
-        if (isMounted) setFacilities([]);
+        if (isMounted) setFacilitiesByLocation({});
       }
     }
     loadFacilities();
     return () => {
       isMounted = false;
     };
-  }, [locationId]);
+  }, [selectedLocationIds.join(",")]);
+
+  const toggleLocation = (id: string) => {
+    setSelectedLocationIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleFacility = (id: string) => {
+    setSelectedFacilityIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+    setSelectedUnitKeys((prev) =>
+      prev.filter((k) => !k.startsWith(`${id}:`))
+    );
+  };
+
+  const allFacilities = useMemo(() => {
+    return Object.values(facilitiesByLocation).flat();
+  }, [facilitiesByLocation]);
+
+  const selectedFacilities = useMemo(
+    () => allFacilities.filter((f) => selectedFacilityIds.includes(f.id)),
+    [allFacilities, selectedFacilityIds]
+  );
+
+  const allUnits = useMemo(() => {
+    return selectedFacilities.flatMap(getUnitsFromFacility);
+  }, [selectedFacilities]);
+
+  const toggleUnit = (key: string) => {
+    setSelectedUnitKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const selectAllUnits = () => {
+    setSelectedUnitKeys(allUnits.map(unitKey));
+  };
+
+  const clearUnits = () => {
+    setSelectedUnitKeys([]);
+  };
 
   function buildDateTime(): { start: Date; end: Date } {
     const [hours, minutes] = startTime.split(":").map((v) => parseInt(v, 10));
@@ -91,34 +195,43 @@ export default function NewBookingPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!locationId || !facilityId || !guestName || !guestPhone) {
-      setError("Location, facility, guest name, and phone are required.");
+    if (selectedUnitKeys.length === 0 || !guestName || !guestPhone) {
+      setError(
+        "Select at least one location, facility and unit (e.g. PC or station), and enter guest name and phone."
+      );
       return;
     }
 
     const { start, end } = buildDateTime();
+    const unitsToBook = allUnits.filter((u) =>
+      selectedUnitKeys.includes(unitKey(u))
+    );
 
     setSubmitting(true);
     setError(null);
     setSuccess(null);
 
     try {
-      await createBookingApi({
-        location_id: locationId,
-        facility_id: facilityId,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        is_walk_in: true,
-        guest_name: guestName,
-        guest_phone: guestPhone,
-        amount: amount ? Number(amount) : undefined,
-      });
-      setSuccess("Walk-in booking created successfully.");
+      for (const unit of unitsToBook) {
+        await createBookingApi({
+          location_id: unit.locationId,
+          facility_id: unit.facilityId,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          is_walk_in: true,
+          guest_name: guestName,
+          guest_phone: guestPhone,
+          amount: amount ? Number(amount) : undefined,
+        });
+      }
+      setSuccess(
+        `${unitsToBook.length} walk-in booking(s) created successfully.`
+      );
       setTimeout(() => {
         router.push("/dashboard/bookings");
       }, 1200);
     } catch (err: any) {
-      setError(err.message || "Failed to create booking");
+      setError(err.message || "Failed to create booking(s)");
     } finally {
       setSubmitting(false);
     }
@@ -132,6 +245,9 @@ export default function NewBookingPage() {
     );
   }
 
+  const inputBase =
+    "h-10 w-10 shrink-0 rounded-lg border-2 border-gray-300 bg-white transition-colors focus:ring-2 focus:ring-primary focus:ring-offset-1 checked:border-primary checked:bg-primary checked:text-white";
+
   return (
     <div className="space-y-6">
       <div>
@@ -139,7 +255,7 @@ export default function NewBookingPage() {
           New walk-in booking
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Create a manual booking for a guest at your venue.
+          Select locations, facilities and units (e.g. PC, PS5), then time and guest.
         </p>
       </div>
 
@@ -161,118 +277,152 @@ export default function NewBookingPage() {
             Booking details
           </h2>
           <p className="mt-1 text-sm text-text-secondary">
-            Choose the location, facility, time, and guest information.
+            Choose locations and facilities with checkboxes, then pick specific units (PC, PS5, etc.) to book multiple at once.
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">
-                  Location *
-                </label>
-                <select
-                  className="mt-1 h-12 w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 text-[15px] text-gray-800 focus:border-fuchsia-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
-                  value={locationId}
-                  onChange={(e) => {
-                    setLocationId(e.target.value);
-                    setFacilityId("");
-                  }}
-                >
-                  <option value="">Select location</option>
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
+            {/* Locations – checkboxes */}
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+                Locations *
+              </label>
+              <div className="flex flex-wrap gap-4">
+                {locations.map((loc) => (
+                  <label
+                    key={loc.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3 hover:bg-gray-100/80 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                  >
+                    <input
+                      type="checkbox"
+                      className={inputBase}
+                      checked={selectedLocationIds.includes(loc.id)}
+                      onChange={() => toggleLocation(loc.id)}
+                    />
+                    <span className="text-sm font-medium text-gray-800">
                       {loc.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">
-                  Facility *
-                </label>
-                <select
-                  className="mt-1 h-12 w-full rounded-xl border border-gray-200 bg-gray-50/80 px-3 text-[15px] text-gray-800 focus:border-fuchsia-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-fuchsia-100"
-                  value={facilityId}
-                  onChange={(e) => setFacilityId(e.target.value)}
-                  disabled={!locationId}
-                >
-                  <option value="">Select facility</option>
-                  {facilities.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 
-            {selectedFacility && (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 space-y-2">
-                <div className="font-medium text-gray-900">
-                  {selectedFacility.name}{" "}
-                  <span className="ml-2 inline-flex rounded-full bg-gray-200 px-2 py-0.5 text-xs uppercase tracking-wide text-gray-700">
-                    {selectedFacility.type}
-                  </span>
-                </div>
-                {selectedFacility.metadata &&
-                  selectedFacility.type === "gaming-pc" && (
-                    <div className="space-y-1">
-                      <div className="font-semibold">PC units:</div>
-                      {Array.isArray((selectedFacility.metadata as any).pcs) &&
-                      (selectedFacility.metadata as any).pcs.length > 0 ? (
-                        <ul className="list-disc pl-5 space-y-0.5">
-                          {(selectedFacility.metadata as any).pcs.map(
-                            (pc: any, index: number) => (
-                              <li key={index}>
-                                <span className="font-medium">
-                                  {pc.label || `PC ${index + 1}`}:
-                                </span>{" "}
-                                <span>
-                                  {[
-                                    pc.cpu && `CPU: ${pc.cpu}`,
-                                    pc.gpu && `GPU: ${pc.gpu}`,
-                                    pc.ram && `RAM: ${pc.ram}`,
-                                    pc.refresh_rate_hz &&
-                                      `Refresh: ${pc.refresh_rate_hz}Hz`,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" | ") || "Specs not specified"}
-                                </span>
-                              </li>
-                            ),
-                          )}
-                        </ul>
-                      ) : (
-                        <div>
-                          {(selectedFacility.metadata as any).specs ||
-                            "Specs not specified"}
+            {/* Facilities – checkboxes (grouped by location) */}
+            {selectedLocationIds.length > 0 && (
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+                  Facilities *
+                </label>
+                <div className="space-y-4">
+                  {selectedLocationIds.map((locId) => {
+                    const loc = locations.find((l) => l.id === locId);
+                    const facs = facilitiesByLocation[locId] || [];
+                    if (facs.length === 0) return null;
+                    return (
+                      <div
+                        key={locId}
+                        className="rounded-xl border border-gray-200 bg-gray-50/50 p-4"
+                      >
+                        <div className="mb-2 text-sm font-semibold text-gray-700">
+                          {loc?.name}
                         </div>
-                      )}
-                    </div>
-                  )}
-                {selectedFacility.metadata &&
-                  (selectedFacility.type === "ps4" ||
-                    selectedFacility.type === "ps5" ||
-                    selectedFacility.type === "xbox") && (
-                    <>
-                      <div>
-                        <span className="font-semibold">Screen size:</span>{" "}
-                        <span>
-                          {(selectedFacility.metadata as any).screen_size_inches
-                            ? `${(selectedFacility.metadata as any).screen_size_inches}" `
-                            : "Not specified"}
-                        </span>
+                        <div className="flex flex-wrap gap-3">
+                          {facs.map((f) => (
+                            <label
+                              key={f.id}
+                              className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 hover:bg-gray-50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                            >
+                              <input
+                                type="checkbox"
+                                className={inputBase}
+                                checked={selectedFacilityIds.includes(f.id)}
+                                onChange={() => toggleFacility(f.id)}
+                              />
+                              <span className="text-sm font-medium text-gray-800">
+                                {f.name}
+                              </span>
+                              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs uppercase text-gray-600">
+                                {f.type}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <span className="font-semibold">Games available:</span>{" "}
-                        <span>
-                          {(selectedFacility.metadata as any).games_available ||
-                            "Not specified"}
-                        </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Units (PC, PS5, etc.) – checkboxes */}
+            {selectedFacilities.length > 0 && allUnits.length > 0 && (
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">
+                    Units to book (e.g. PC 1, PC 2, PS5) *
+                  </label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={selectAllUnits}
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={clearUnits}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+                  {selectedFacilities.map((facility) => {
+                    const units = getUnitsFromFacility(facility);
+                    return (
+                      <div key={facility.id}>
+                        <div className="mb-1.5 text-sm font-semibold text-gray-800">
+                          {facility.name}{" "}
+                          <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-normal uppercase text-gray-600">
+                            {facility.type}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {units.map((unit) => {
+                            const key = unitKey(unit);
+                            const checked = selectedUnitKeys.includes(key);
+                            return (
+                              <label
+                                key={key}
+                                className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 hover:bg-gray-50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className={inputBase}
+                                  checked={checked}
+                                  onChange={() => toggleUnit(key)}
+                                />
+                                <span className="text-sm font-medium text-gray-800">
+                                  {unit.label}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </>
-                  )}
+                    );
+                  })}
+                </div>
+                {selectedUnitKeys.length > 0 && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    <Check className="mr-1 inline h-4 w-4 text-primary" />
+                    {selectedUnitKeys.length} unit(s) selected — one booking per unit for the same time and guest.
+                  </p>
+                )}
               </div>
             )}
 
@@ -351,13 +501,17 @@ export default function NewBookingPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting}>
+              <Button
+                type="submit"
+                disabled={submitting || selectedUnitKeys.length === 0}
+              >
                 {submitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating…
+                    Creating {selectedUnitKeys.length} booking(s)…
                   </>
                 ) : (
+                  `Create ${selectedUnitKeys.length || ""} booking(s)`.trim() ||
                   "Create booking"
                 )}
               </Button>
@@ -368,4 +522,3 @@ export default function NewBookingPage() {
     </div>
   );
 }
-

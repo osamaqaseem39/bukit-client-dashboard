@@ -173,15 +173,33 @@ export type DashboardModuleKey =
   | "analytics"
   | "settings";
 
+/** Single source of truth for dashboard module labels (used in Settings and Users). */
+export const DASHBOARD_MODULES: { key: DashboardModuleKey; label: string }[] = [
+  { key: "dashboard-overview", label: "Dashboard overview" },
+  { key: "gaming", label: "Gaming" },
+  { key: "snooker", label: "Snooker" },
+  { key: "table-tennis", label: "Table Tennis" },
+  { key: "arena", label: "Arena (Cricket, Futsal, Padel)" },
+  { key: "locations", label: "Locations" },
+  { key: "users", label: "Users" },
+  { key: "bookings", label: "Bookings" },
+  { key: "analytics", label: "Analytics" },
+  { key: "settings", label: "Settings" },
+];
+
 export interface AuthUserProfile {
   id: string;
   email: string;
   name: string;
-  role: "super_admin" | "admin" | "client" | "user";
+  role: "super_admin" | "admin" | "client" | "user" | "location_manager";
   /**
    * Optional client_id for users that belong to a client admin's domain.
    */
   client_id?: string | null;
+  /**
+   * When role is location_manager, the single location this user manages (belongs to client).
+   */
+  managed_location_id?: string | null;
   /**
    * Optional list of dashboard modules this user is allowed to see.
    *
@@ -209,8 +227,9 @@ export interface AdminUserSummary {
   id: string;
   email: string;
   name: string;
-  role: "super_admin" | "admin" | "client" | "user";
+  role: "super_admin" | "admin" | "client" | "user" | "location_manager";
   client_id?: string | null;
+  managed_location_id?: string | null;
   modules?: DashboardModuleKey[] | null;
 }
 
@@ -218,12 +237,16 @@ export interface CreateUserPayload {
   name: string;
   email: string;
   password: string;
-  role?: "super_admin" | "admin" | "client" | "user";
+  role?: "super_admin" | "admin" | "client" | "user" | "location_manager";
+  /** Required when role is location_manager: ID of the location this user will manage. */
+  managed_location_id?: string | null;
 }
 
 export interface UpdateUserRolePayload {
-  role?: "super_admin" | "admin" | "client" | "user";
+  role?: "super_admin" | "admin" | "client" | "user" | "location_manager";
   modules?: DashboardModuleKey[] | null;
+  /** When role is location_manager, the location this user manages. Set null to clear. */
+  managed_location_id?: string | null;
 }
 
 export async function getUsersApi() {
