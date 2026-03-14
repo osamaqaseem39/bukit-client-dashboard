@@ -26,6 +26,66 @@ const initialErrorState: StepErrorState = {
   fields: {},
 };
 
+/** Facility type (category) and its specific facility options */
+const FACILITY_TYPE_GROUPS: {
+  category: string;
+  label: string;
+  facilities: { value: string; label: string }[];
+}[] = [
+  {
+    category: "gaming-zone",
+    label: "Gaming Zone",
+    facilities: [
+      { value: "gaming-pc", label: "PC" },
+      { value: "xbox", label: "Xbox" },
+      { value: "ps5", label: "PS5" },
+      { value: "ps4", label: "PS4" },
+      { value: "vr", label: "VR" },
+    ],
+  },
+  {
+    category: "snooker",
+    label: "Snooker",
+    facilities: [
+      { value: "snooker-table", label: "Snooker table" },
+      { value: "billiard", label: "Billiard" },
+    ],
+  },
+  {
+    category: "table-tennis",
+    label: "Table Tennis",
+    facilities: [{ value: "table-tennis-table", label: "Table tennis table" }],
+  },
+  {
+    category: "arena",
+    label: "Arena",
+    facilities: [
+      { value: "futsal-field", label: "Futsal field" },
+      { value: "cricket-pitch", label: "Cricket pitch" },
+      { value: "padel-court", label: "Padel court" },
+    ],
+  },
+  {
+    category: "other",
+    label: "Other",
+    facilities: [{ value: "other", label: "Other" }],
+  },
+];
+
+function getCategoryForType(type: string): string {
+  for (const group of FACILITY_TYPE_GROUPS) {
+    if (group.facilities.some((f) => f.value === type)) return group.category;
+  }
+  return "other";
+}
+
+function getFacilityOptionsForCategory(category: string) {
+  return (
+    FACILITY_TYPE_GROUPS.find((g) => g.category === category)?.facilities ??
+    FACILITY_TYPE_GROUPS[FACILITY_TYPE_GROUPS.length - 1].facilities
+  );
+}
+
 export default function ClientOnboardingPage() {
   const router = useRouter();
 
@@ -869,7 +929,31 @@ export default function ClientOnboardingPage() {
                     />
                     <div>
                       <label className="mb-1 block text-xs font-medium text-text-secondary">
-                        Type *
+                        Facility type *
+                      </label>
+                      <select
+                        className="w-full rounded-md border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-primary"
+                        value={getCategoryForType(fac.type)}
+                        onChange={(e) => {
+                          const category = e.target.value;
+                          const options = getFacilityOptionsForCategory(category);
+                          handleFacilityChange(
+                            index,
+                            "type",
+                            options[0]?.value ?? "other"
+                          );
+                        }}
+                      >
+                        {FACILITY_TYPE_GROUPS.map((g) => (
+                          <option key={g.category} value={g.category}>
+                            {g.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-text-secondary">
+                        Facility *
                       </label>
                       <select
                         className="w-full rounded-md border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:border-primary"
@@ -878,19 +962,13 @@ export default function ClientOnboardingPage() {
                           handleFacilityChange(index, "type", e.target.value)
                         }
                       >
-                        <option value="gaming-pc">Gaming — PC</option>
-                        <option value="vr">Gaming — VR</option>
-                        <option value="ps5">Gaming — PS5</option>
-                        <option value="ps4">Gaming — PS4</option>
-                        <option value="xbox">Gaming — XBOX</option>
-                        <option value="snooker-table">Snooker table</option>
-                        <option value="table-tennis-table">
-                          Table tennis table
-                        </option>
-                        <option value="futsal-field">Futsal field</option>
-                        <option value="cricket-pitch">Cricket pitch</option>
-                        <option value="padel-court">Padel court</option>
-                        <option value="other">Other</option>
+                        {getFacilityOptionsForCategory(
+                          getCategoryForType(fac.type)
+                        ).map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
                       </select>
                       {step3Errors.fields[`${index}.type`] && (
                         <p className="mt-1 text-xs text-red-500">
