@@ -74,6 +74,7 @@ export default function DashboardSetupPage() {
       city: "",
       state: "",
       country: "",
+      postal_code: "",
       phone: "",
       latitude: undefined,
       longitude: undefined,
@@ -240,6 +241,7 @@ export default function DashboardSetupPage() {
         city: "",
         state: "",
         country: "",
+        postal_code: "",
         phone: "",
         latitude: undefined,
         longitude: undefined,
@@ -837,6 +839,14 @@ export default function DashboardSetupPage() {
                       }
                       error={
                         step2Errors.fields[`${index}.country`] ?? undefined
+                      }
+                    />
+                    <Input
+                      label="Postal code"
+                      placeholder="ZIP or postal code"
+                      value={loc.postal_code || ""}
+                      onChange={(e) =>
+                        handleLocationChange(index, "postal_code", e.target.value)
                       }
                     />
                     <Input
