@@ -42,7 +42,6 @@ export default function ClientOnboardingPage() {
     contactName: "",
     email: "",
     phone: "",
-    address: "",
     city: "",
     country: "",
     taxId: "",
@@ -336,7 +335,6 @@ export default function ClientOnboardingPage() {
           contact_name: businessForm.contactName,
           email: businessForm.email,
           phone: businessForm.phone,
-          address: businessForm.address || undefined,
           city: businessForm.city,
           country: businessForm.country,
           tax_id: businessForm.taxId || undefined,
@@ -569,14 +567,6 @@ export default function ClientOnboardingPage() {
                   handleBusinessChange("adminPassword", e.target.value)
                 }
                 error={step1Errors.fields.adminPassword ?? undefined}
-              />
-              <Input
-                label="Address"
-                placeholder="Street and number"
-                value={businessForm.address}
-                onChange={(e) =>
-                  handleBusinessChange("address", e.target.value)
-                }
               />
               <Input
                 label="City *"

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import { ImageUpload } from "@/components/ui";
 import { Save, Loader2, Shield, Users, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
@@ -222,16 +223,6 @@ export default function SettingsPage() {
                 }
               />
             </div>
-            <Input
-              label="Address"
-              value={formData.address || ""}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  address: e.target.value || null,
-                }))
-              }
-            />
             <div className="grid gap-4 md:grid-cols-3">
               <Input
                 label="City"
@@ -277,25 +268,20 @@ export default function SettingsPage() {
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                label="Logo URL"
-                type="url"
-                value={formData.logo_url || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    logo_url: e.target.value || null,
-                  }))
+              <ImageUpload
+                label="Logo"
+                value={formData.logo_url || undefined}
+                onChange={(url) =>
+                  setFormData((prev) => ({ ...prev, logo_url: url || null }))
                 }
               />
-              <Input
-                label="Cover Image URL"
-                type="url"
-                value={formData.cover_image_url || ""}
-                onChange={(e) =>
+              <ImageUpload
+                label="Cover image"
+                value={formData.cover_image_url || undefined}
+                onChange={(url) =>
                   setFormData((prev) => ({
                     ...prev,
-                    cover_image_url: e.target.value || null,
+                    cover_image_url: url || null,
                   }))
                 }
               />

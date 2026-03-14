@@ -45,6 +45,7 @@ export default function ImageUpload({
       )}
       {value && (
         <div className="mb-2">
+          <p className="text-xs font-medium text-text-secondary mb-1">Thumbnail</p>
           <img
             src={value}
             alt="Preview"

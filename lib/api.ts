@@ -268,17 +268,46 @@ export async function updateUserPasswordApi(id: string, password: string) {
   });
 }
 
-export async function uploadImageApi(file: File) {
+const IMAGE_UPLOAD_URL =
+  process.env.NEXT_PUBLIC_IMAGE_UPLOAD_URL || "";
+
+export interface UploadImageResult {
+  url: string;
+  filename?: string;
+  size?: number;
+}
+
+/** Upload image via PHP endpoint (if NEXT_PUBLIC_IMAGE_UPLOAD_URL set) or backend /auth/upload */
+export async function uploadImageApi(file: File): Promise<UploadImageResult> {
   const formData = new FormData();
   formData.append("file", file);
 
-  return apiFetch<{ url: string; filename: string; size: number }>(
+  if (IMAGE_UPLOAD_URL) {
+    const res = await fetch(IMAGE_UPLOAD_URL, {
+      method: "POST",
+      body: formData,
+      credentials: "omit",
+    });
+    const json = await res.json();
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.message || "Image upload failed");
+    }
+    const data = json.data;
+    return {
+      url: data?.url ?? "",
+      filename: data?.filename,
+      size: data?.size,
+    };
+  }
+
+  const result = await apiFetch<{ url: string; filename: string; size: number }>(
     "/auth/upload",
     {
       method: "POST",
       body: formData,
     }
   );
+  return result;
 }
 
 // Bookings
