@@ -12,6 +12,7 @@ import {
 import type { Location, Facility } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 
 /** One bookable unit: either the whole facility or a sub-unit (e.g. PC 1, PC 2). */
 export interface BookableUnit {
@@ -89,6 +90,11 @@ function nextFiveMinTime(): string {
 
 export default function NewBookingPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isLocationManager =
+    user?.role === "location_manager" && Boolean(user?.managed_location_id);
+  const managedLocationId = user?.managed_location_id ?? null;
+
   const [locations, setLocations] = useState<Location[]>([]);
   const [facilitiesByLocation, setFacilitiesByLocation] = useState<
     Record<string, Facility[]>
@@ -101,11 +107,17 @@ export default function NewBookingPage() {
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [guestName, setGuestName] = useState<string>("");
   const [guestPhone, setGuestPhone] = useState<string>("");
-  const [amount, setAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Location manager: lock to their managed location
+  useEffect(() => {
+    if (isLocationManager && managedLocationId) {
+      setSelectedLocationIds([managedLocationId]);
+    }
+  }, [isLocationManager, managedLocationId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -149,8 +161,16 @@ export default function NewBookingPage() {
         );
         if (isMounted) {
           setFacilitiesByLocation(next);
-          setSelectedFacilityIds([]);
-          setSelectedUnitKeys([]);
+          if (!isLocationManager) {
+            setSelectedFacilityIds([]);
+            setSelectedUnitKeys([]);
+          } else if (managedLocationId && next[managedLocationId]?.length === 1) {
+            setSelectedFacilityIds([next[managedLocationId][0].id]);
+            setSelectedUnitKeys([]);
+          } else {
+            setSelectedFacilityIds([]);
+            setSelectedUnitKeys([]);
+          }
         }
       } catch {
         if (isMounted) setFacilitiesByLocation({});
@@ -160,7 +180,7 @@ export default function NewBookingPage() {
     return () => {
       isMounted = false;
     };
-  }, [selectedLocationIds.join(",")]);
+  }, [selectedLocationIds.join(","), isLocationManager, managedLocationId]);
 
   const toggleLocation = (id: string) => {
     setSelectedLocationIds((prev) =>
@@ -240,7 +260,6 @@ export default function NewBookingPage() {
           is_walk_in: true,
           guest_name: guestName,
           guest_phone: guestPhone,
-          amount: amount ? Number(amount) : undefined,
         });
       }
       setSuccess(
@@ -276,7 +295,9 @@ export default function NewBookingPage() {
           New walk-in booking
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Select locations, facilities and units (e.g. PC, PS5), then time and guest.
+          {isLocationManager
+            ? "Select units (e.g. PC, PS5), then time and guest. Location and facility are set for you."
+            : "Select locations, facilities and units (e.g. PC, PS5), then time and guest."}
         </p>
       </div>
 
@@ -298,35 +319,42 @@ export default function NewBookingPage() {
             Booking details
           </h2>
           <p className="mt-1 text-sm text-text-secondary">
-            Choose locations, facilities and units (PC, PS5, etc.) by tapping the buttons; select multiple to book at once.
+            {isLocationManager
+              ? "Choose units (PC, PS5, etc.) and time, then enter guest details. Select multiple units to book at once."
+              : "Choose locations, facilities and units (PC, PS5, etc.) by tapping the buttons; select multiple to book at once."}
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Locations – button toggles */}
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
-                Locations *
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {locations.map((loc) => {
-                  const selected = selectedLocationIds.includes(loc.id);
-                  return (
-                    <button
-                      key={loc.id}
-                      type="button"
-                      onClick={() => toggleLocation(loc.id)}
-                      className={toggleBtn(selected)}
-                    >
-                      {loc.name}
-                    </button>
-                  );
-                })}
+            {/* Locations – only for client (location manager has location pre-selected) */}
+            {!isLocationManager && (
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
+                  Locations *
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {locations.map((loc) => {
+                    const selected = selectedLocationIds.includes(loc.id);
+                    return (
+                      <button
+                        key={loc.id}
+                        type="button"
+                        onClick={() => toggleLocation(loc.id)}
+                        className={toggleBtn(selected)}
+                      >
+                        {loc.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Facilities – button toggles (grouped by location) */}
-            {selectedLocationIds.length > 0 && (
+            {/* Facilities – only for client, or for location manager when more than one facility */}
+            {selectedLocationIds.length > 0 &&
+              (!isLocationManager ||
+                (managedLocationId &&
+                  (facilitiesByLocation[managedLocationId]?.length ?? 0) > 1)) && (
               <div>
                 <label className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
                   Facilities *
@@ -441,13 +469,7 @@ export default function NewBookingPage() {
             )}
 
             <div className="space-y-3">
-              <div className="grid gap-4 md:grid-cols-3">
-                <Input
-                  type="date"
-                  label="Date *"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
+              <div className="grid gap-4 md:grid-cols-2">
                 <Input
                   type="time"
                   label="Start time *"
@@ -465,6 +487,9 @@ export default function NewBookingPage() {
                   }
                 />
               </div>
+              <p className="text-xs text-text-secondary">
+                Date is set to today automatically.
+              </p>
 
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -494,17 +519,6 @@ export default function NewBookingPage() {
                 value={guestPhone}
                 onChange={(e) => setGuestPhone(e.target.value)}
               />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                label="Amount (optional)"
-                type="number"
-                min={0}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <Input label="Currency" value="PKR" disabled />
             </div>
 
             <div className="flex items-center justify-end gap-3">

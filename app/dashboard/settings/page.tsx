@@ -134,19 +134,16 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Business Information - Only for clients */}
+      {/* Business Information - Only for clients (matches admin business settings) */}
       {isClient() && clientData && (
         <Card>
           <CardHeader>
             <h2 className="text-lg font-medium text-text-primary">
               Business Information
             </h2>
-            <p className="mt-1 text-sm text-text-secondary">
-              Update your business profile and contact details
-            </p>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2">
               <Input
                 label="Company Name *"
                 value={formData.company_name || ""}
@@ -168,7 +165,7 @@ export default function SettingsPage() {
                 }
               />
               <Input
-                label="Email"
+                label="Email *"
                 type="email"
                 value={formData.email || ""}
                 onChange={(e) =>
@@ -210,51 +207,7 @@ export default function SettingsPage() {
                 }
               />
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <Input
-                label="City"
-                value={formData.city || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    city: e.target.value || null,
-                  }))
-                }
-              />
-              <Input
-                label="State"
-                value={formData.state || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    state: e.target.value || null,
-                  }))
-                }
-              />
-              <Input
-                label="Country"
-                value={formData.country || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    country: e.target.value || null,
-                  }))
-                }
-              />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                label="Postal Code"
-                value={formData.postal_code || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    postal_code: e.target.value || null,
-                  }))
-                }
-              />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2">
               <ImageUpload
                 label="Logo"
                 value={formData.logo_url || undefined}
@@ -274,7 +227,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-text-primary">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-text-primary mb-1.5">
                 Description
               </label>
               <textarea
@@ -287,7 +240,6 @@ export default function SettingsPage() {
                     description: e.target.value || null,
                   }))
                 }
-                placeholder="Business description..."
               />
             </div>
             <div className="flex justify-end pt-4">
