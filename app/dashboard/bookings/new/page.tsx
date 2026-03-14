@@ -10,7 +10,7 @@ import {
   getFacilitiesByLocationApi,
 } from "@/lib/api";
 import type { Location, Facility } from "@/lib/api";
-import { Loader2, Check } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 /** One bookable unit: either the whole facility or a sub-unit (e.g. PC 1, PC 2). */
@@ -65,6 +65,28 @@ function unitKey(unit: BookableUnit): string {
   return `${unit.facilityId}:${unit.unitIndex}`;
 }
 
+/** Today's date in local time as YYYY-MM-DD. */
+function todayLocalDate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Current time rounded up to the next 5-minute interval (e.g. 14:23 → 14:25). */
+function nextFiveMinTime(): string {
+  const d = new Date();
+  const mins = d.getMinutes();
+  let hours = d.getHours();
+  const roundedMins = Math.ceil(mins / 5) * 5;
+  if (roundedMins >= 60) {
+    hours += 1;
+    return `${String(hours).padStart(2, "0")}:00`;
+  }
+  return `${String(hours).padStart(2, "0")}:${String(roundedMins).padStart(2, "0")}`;
+}
+
 export default function NewBookingPage() {
   const router = useRouter();
   const [locations, setLocations] = useState<Location[]>([]);
@@ -74,11 +96,8 @@ export default function NewBookingPage() {
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [selectedFacilityIds, setSelectedFacilityIds] = useState<string[]>([]);
   const [selectedUnitKeys, setSelectedUnitKeys] = useState<string[]>([]);
-  const [date, setDate] = useState<string>(() => {
-    const today = new Date();
-    return today.toISOString().slice(0, 10);
-  });
-  const [startTime, setStartTime] = useState<string>("18:00");
+  const [date, setDate] = useState<string>(() => todayLocalDate());
+  const [startTime, setStartTime] = useState<string>(() => nextFiveMinTime());
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
   const [guestName, setGuestName] = useState<string>("");
   const [guestPhone, setGuestPhone] = useState<string>("");
@@ -245,8 +264,10 @@ export default function NewBookingPage() {
     );
   }
 
-  const inputBase =
-    "h-10 w-10 shrink-0 rounded-lg border-2 border-gray-300 bg-white transition-colors focus:ring-2 focus:ring-primary focus:ring-offset-1 checked:border-primary checked:bg-primary checked:text-white";
+  const toggleBtn = (selected: boolean) =>
+    selected
+      ? "rounded-lg border-2 border-primary bg-primary px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary/90"
+      : "rounded-lg border-2 border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50";
 
   return (
     <div className="space-y-6">
@@ -277,37 +298,34 @@ export default function NewBookingPage() {
             Booking details
           </h2>
           <p className="mt-1 text-sm text-text-secondary">
-            Choose locations and facilities with checkboxes, then pick specific units (PC, PS5, etc.) to book multiple at once.
+            Choose locations, facilities and units (PC, PS5, etc.) by tapping the buttons; select multiple to book at once.
           </p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Locations – checkboxes */}
+            {/* Locations – button toggles */}
             <div>
               <label className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
                 Locations *
               </label>
-              <div className="flex flex-wrap gap-4">
-                {locations.map((loc) => (
-                  <label
-                    key={loc.id}
-                    className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3 hover:bg-gray-100/80 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                  >
-                    <input
-                      type="checkbox"
-                      className={inputBase}
-                      checked={selectedLocationIds.includes(loc.id)}
-                      onChange={() => toggleLocation(loc.id)}
-                    />
-                    <span className="text-sm font-medium text-gray-800">
+              <div className="flex flex-wrap gap-2">
+                {locations.map((loc) => {
+                  const selected = selectedLocationIds.includes(loc.id);
+                  return (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => toggleLocation(loc.id)}
+                      className={toggleBtn(selected)}
+                    >
                       {loc.name}
-                    </span>
-                  </label>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Facilities – checkboxes (grouped by location) */}
+            {/* Facilities – button toggles (grouped by location) */}
             {selectedLocationIds.length > 0 && (
               <div>
                 <label className="block text-xs font-medium uppercase tracking-wide text-gray-500 mb-2">
@@ -326,26 +344,29 @@ export default function NewBookingPage() {
                         <div className="mb-2 text-sm font-semibold text-gray-700">
                           {loc?.name}
                         </div>
-                        <div className="flex flex-wrap gap-3">
-                          {facs.map((f) => (
-                            <label
-                              key={f.id}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 hover:bg-gray-50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                            >
-                              <input
-                                type="checkbox"
-                                className={inputBase}
-                                checked={selectedFacilityIds.includes(f.id)}
-                                onChange={() => toggleFacility(f.id)}
-                              />
-                              <span className="text-sm font-medium text-gray-800">
-                                {f.name}
-                              </span>
-                              <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs uppercase text-gray-600">
-                                {f.type}
-                              </span>
-                            </label>
-                          ))}
+                        <div className="flex flex-wrap gap-2">
+                          {facs.map((f) => {
+                            const selected = selectedFacilityIds.includes(f.id);
+                            return (
+                              <button
+                                key={f.id}
+                                type="button"
+                                onClick={() => toggleFacility(f.id)}
+                                className={toggleBtn(selected)}
+                              >
+                                {f.name}{" "}
+                                <span
+                                  className={
+                                    selected
+                                      ? "rounded-full bg-white/30 px-1.5 py-0.5 text-xs uppercase"
+                                      : "rounded-full bg-gray-200 px-1.5 py-0.5 text-xs uppercase text-gray-600"
+                                  }
+                                >
+                                  {f.type}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -354,7 +375,7 @@ export default function NewBookingPage() {
               </div>
             )}
 
-            {/* Units (PC, PS5, etc.) – checkboxes */}
+            {/* Units (PC, PS5, etc.) – button toggles */}
             {selectedFacilities.length > 0 && allUnits.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center justify-between">
@@ -394,22 +415,16 @@ export default function NewBookingPage() {
                         <div className="flex flex-wrap gap-2">
                           {units.map((unit) => {
                             const key = unitKey(unit);
-                            const checked = selectedUnitKeys.includes(key);
+                            const selected = selectedUnitKeys.includes(key);
                             return (
-                              <label
+                              <button
                                 key={key}
-                                className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 hover:bg-gray-50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                                type="button"
+                                onClick={() => toggleUnit(key)}
+                                className={toggleBtn(selected)}
                               >
-                                <input
-                                  type="checkbox"
-                                  className={inputBase}
-                                  checked={checked}
-                                  onChange={() => toggleUnit(key)}
-                                />
-                                <span className="text-sm font-medium text-gray-800">
-                                  {unit.label}
-                                </span>
-                              </label>
+                                {unit.label}
+                              </button>
                             );
                           })}
                         </div>
@@ -419,7 +434,6 @@ export default function NewBookingPage() {
                 </div>
                 {selectedUnitKeys.length > 0 && (
                   <p className="mt-2 text-sm text-gray-600">
-                    <Check className="mr-1 inline h-4 w-4 text-primary" />
                     {selectedUnitKeys.length} unit(s) selected — one booking per unit for the same time and guest.
                   </p>
                 )}

@@ -5,7 +5,6 @@ import { Loader2, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import Modal from "@/components/ui/Modal";
 import {
   Table,
   TableBody,
@@ -53,8 +52,8 @@ export default function FacilitiesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [formState, setFormState] = useState<FacilityFormState>({
     name: "",
     type: "gaming",
@@ -103,7 +102,7 @@ export default function FacilitiesPage() {
     }
   }
 
-  function openCreateModal() {
+  function openCreateForm() {
     setEditingFacility(null);
     setFormState({
       name: "",
@@ -111,10 +110,10 @@ export default function FacilitiesPage() {
       status: "active",
       capacity: null,
     });
-    setIsModalOpen(true);
+    setShowForm(true);
   }
 
-  function openEditModal(facility: Facility) {
+  function openEditForm(facility: Facility) {
     setEditingFacility(facility);
     setFormState({
       name: facility.name,
@@ -123,11 +122,11 @@ export default function FacilitiesPage() {
       capacity:
         typeof facility.capacity === "number" ? facility.capacity : null,
     });
-    setIsModalOpen(true);
+    setShowForm(true);
   }
 
-  function closeModal() {
-    setIsModalOpen(false);
+  function closeForm() {
+    setShowForm(false);
     setEditingFacility(null);
   }
 
@@ -168,7 +167,7 @@ export default function FacilitiesPage() {
       }
 
       await loadFacilities(selectedLocationId);
-      closeModal();
+      closeForm();
     } catch (err: any) {
       setError(
         err.message ||
@@ -237,7 +236,7 @@ export default function FacilitiesPage() {
             </select>
           </div>
           <Button
-            onClick={openCreateModal}
+            onClick={openCreateForm}
             disabled={!selectedLocationId || loadingLocations}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -322,7 +321,7 @@ export default function FacilitiesPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => openEditModal(facility)}
+                        onClick={() => openEditForm(facility)}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -359,95 +358,104 @@ export default function FacilitiesPage() {
         </CardContent>
       </Card>
 
-      {/* Create/Edit Facility Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={closeModal}
-        title={editingFacility ? "Edit Facility" : "Add Facility"}
-        size="md"
-      >
-        <div className="space-y-4">
-          <Input
-            label="Facility Name *"
-            value={formState.name}
-            onChange={(e) =>
-              setFormState((prev) => ({ ...prev, name: e.target.value }))
-            }
-            placeholder="e.g. Snooker Table 1"
-          />
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-secondary">
-                Type
-              </label>
-              <select
-                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                value={formState.type}
+      {/* Add/Edit Facility form – inline on page */}
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-medium text-text-primary">
+              {editingFacility ? "Edit Facility" : "Add Facility"}
+            </h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              {editingFacility
+                ? "Update the facility details below."
+                : "Enter the new facility details for the selected location."}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Input
+                label="Facility Name *"
+                value={formState.name}
+                onChange={(e) =>
+                  setFormState((prev) => ({ ...prev, name: e.target.value }))
+                }
+                placeholder="e.g. Snooker Table 1"
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">
+                    Type
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                    value={formState.type}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        type: e.target.value as FacilityType,
+                      }))
+                    }
+                  >
+                    <option value="gaming">Gaming</option>
+                    <option value="snooker">Snooker</option>
+                    <option value="table-tennis">Table Tennis</option>
+                    <option value="arena">Arena</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">
+                    Status
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                    value={formState.status}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        status: e.target.value as FacilityStatus,
+                      }))
+                    }
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="maintenance">Maintenance</option>
+                  </select>
+                </div>
+              </div>
+              <Input
+                label="Capacity"
+                type="number"
+                value={
+                  formState.capacity !== null ? String(formState.capacity) : ""
+                }
                 onChange={(e) =>
                   setFormState((prev) => ({
                     ...prev,
-                    type: e.target.value as FacilityType,
+                    capacity: e.target.value ? Number(e.target.value) : null,
                   }))
                 }
-              >
-                <option value="gaming">Gaming</option>
-                <option value="snooker">Snooker</option>
-                <option value="table-tennis">Table Tennis</option>
-                <option value="arena">Arena</option>
-                <option value="other">Other</option>
-              </select>
+                placeholder="e.g. 4"
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="secondary" onClick={closeForm}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-text-secondary">
-                Status
-              </label>
-              <select
-                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                value={formState.status}
-                onChange={(e) =>
-                  setFormState((prev) => ({
-                    ...prev,
-                    status: e.target.value as FacilityStatus,
-                  }))
-                }
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="maintenance">Maintenance</option>
-              </select>
-            </div>
-          </div>
-          <Input
-            label="Capacity"
-            type="number"
-            value={
-              formState.capacity !== null ? String(formState.capacity) : ""
-            }
-            onChange={(e) =>
-              setFormState((prev) => ({
-                ...prev,
-                capacity: e.target.value ? Number(e.target.value) : null,
-              }))
-            }
-            placeholder="e.g. 4"
-          />
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="secondary" onClick={closeModal}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
