@@ -4,16 +4,21 @@ import React, { useState } from "react";
 import { uploadImageApi } from "@/lib/api";
 import Button from "./Button";
 
+type ImageUploadVariant = "logo" | "cover" | "default";
+
 interface ImageUploadProps {
   label?: string;
   value?: string;
   onChange: (url: string) => void;
+  /** "logo" = square preview, full logo visible; "cover" = wide banner preview */
+  variant?: ImageUploadVariant;
 }
 
 export default function ImageUpload({
   label,
   value,
   onChange,
+  variant = "default",
 }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +41,13 @@ export default function ImageUpload({
     }
   };
 
+  const previewClass =
+    variant === "logo"
+      ? "h-28 w-28 rounded-lg border border-border object-contain bg-surface-elevated"
+      : variant === "cover"
+        ? "w-full max-w-md aspect-[3/1] rounded-lg border border-border object-cover bg-surface-elevated"
+        : "h-24 w-24 rounded-md object-cover border border-border";
+
   return (
     <div className="space-y-2">
       {label && (
@@ -45,11 +57,11 @@ export default function ImageUpload({
       )}
       {value && (
         <div className="mb-2">
-          <p className="text-xs font-medium text-text-secondary mb-1">Thumbnail</p>
+          <p className="text-xs font-medium text-text-secondary mb-1">Preview</p>
           <img
             src={value}
-            alt="Preview"
-            className="h-24 w-24 rounded-md object-cover border border-border"
+            alt={label ? `${label} preview` : "Preview"}
+            className={previewClass}
           />
         </div>
       )}

@@ -706,11 +706,13 @@ export default function DashboardSetupPage() {
                 label="Logo"
                 value={businessForm.logoUrl || undefined}
                 onChange={(url) => handleBusinessChange("logoUrl", url)}
+                variant="logo"
               />
               <ImageUpload
                 label="Cover image"
                 value={businessForm.coverImageUrl || undefined}
                 onChange={(url) => handleBusinessChange("coverImageUrl", url)}
+                variant="cover"
               />
             </div>
             <Input

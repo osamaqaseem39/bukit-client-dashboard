@@ -189,11 +189,13 @@ export default function GamingPage() {
             label="Logo"
             value={logoUrl}
             onChange={setLogoUrl}
+            variant="logo"
           />
           <ImageUpload
             label="Cover Image"
             value={coverUrl}
             onChange={setCoverUrl}
+            variant="cover"
           />
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>

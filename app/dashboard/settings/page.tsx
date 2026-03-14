@@ -214,6 +214,7 @@ export default function SettingsPage() {
                 onChange={(url) =>
                   setFormData((prev) => ({ ...prev, logo_url: url || null }))
                 }
+                variant="logo"
               />
               <ImageUpload
                 label="Cover image"
@@ -224,6 +225,7 @@ export default function SettingsPage() {
                     cover_image_url: url || null,
                   }))
                 }
+                variant="cover"
               />
             </div>
             <div>
