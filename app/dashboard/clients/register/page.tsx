@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import { ImageUpload } from "@/components/ui";
 import {
   createClientWithUserApi,
   createFacilityAtLocationApi,
@@ -600,13 +601,11 @@ export default function ClientOnboardingPage() {
                   handleBusinessChange("registrationNumber", e.target.value)
                 }
               />
-              <Input
-                label="Logo URL"
-                placeholder="https://..."
-                value={businessForm.logoUrl}
-                onChange={(e) =>
-                  handleBusinessChange("logoUrl", e.target.value)
-                }
+              <ImageUpload
+                label="Logo"
+                value={businessForm.logoUrl || undefined}
+                onChange={(url) => handleBusinessChange("logoUrl", url)}
+                variant="logo"
               />
             </div>
             <Input
