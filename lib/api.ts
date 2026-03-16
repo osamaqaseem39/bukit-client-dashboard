@@ -112,8 +112,10 @@ export async function apiFetch<T>(
     throw new Error(message);
   }
 
-  if (res.status === 204) {
-    // No Content
+  const contentType = res.headers.get("content-type") || "";
+
+  // No content or non-JSON responses
+  if (res.status === 204 || !contentType.toLowerCase().includes("application/json")) {
     return undefined as T;
   }
 
