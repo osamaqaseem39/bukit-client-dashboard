@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Loader2, MapPin, Pencil, Plus, Trash2, X, Copy } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -648,6 +648,22 @@ export default function FacilitiesPage() {
                               setFormState((prev) => ({ ...prev, pcs }));
                             }}
                           />
+                          <button
+                            type="button"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface hover:text-text-primary"
+                            onClick={() => {
+                              const pcs = [...formState.pcs];
+                              const baseLabel = pc.label?.trim() || `PC ${index + 1}`;
+                              pcs.push({
+                                ...pc,
+                                label: `${baseLabel} (copy)`,
+                              });
+                              setFormState((prev) => ({ ...prev, pcs }));
+                            }}
+                            aria-label="Duplicate PC"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
                           {formState.pcs.length > 1 && (
                             <button
                               type="button"
