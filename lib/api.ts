@@ -165,10 +165,6 @@ export async function registerApi(data: {
 
 export type DashboardModuleKey =
   | "dashboard-overview"
-  | "gaming"
-  | "snooker"
-  | "table-tennis"
-  | "arena"
   | "locations"
   | "users"
   | "bookings"
@@ -178,10 +174,6 @@ export type DashboardModuleKey =
 /** Single source of truth for dashboard module labels (used in Settings and Users). */
 export const DASHBOARD_MODULES: { key: DashboardModuleKey; label: string }[] = [
   { key: "dashboard-overview", label: "Dashboard overview" },
-  { key: "gaming", label: "Gaming" },
-  { key: "snooker", label: "Snooker" },
-  { key: "table-tennis", label: "Table Tennis" },
-  { key: "arena", label: "Arena (Cricket, Futsal, Padel)" },
   { key: "locations", label: "Locations" },
   { key: "users", label: "Users" },
   { key: "bookings", label: "Bookings" },
@@ -456,6 +448,17 @@ export async function getLocationsApi(clientId?: string) {
   return apiFetch<Location[]>(`/locations${query}`);
 }
 
+export interface LocationCityDto {
+  name: string;
+  state?: string | null;
+  country?: string | null;
+  locations_count?: number;
+}
+
+export async function getLocationCitiesApi() {
+  return apiFetch<LocationCityDto[]>(`/locations/cities`);
+}
+
 // Gaming facilities
 export type GamingStatus = "active" | "inactive" | "maintenance";
 
@@ -685,7 +688,47 @@ export async function deleteLocationApi(id: string) {
   });
 }
 
+export interface FacilityTypeDto {
+  type: string;
+  locations_count?: number;
+  facilities_count?: number;
+}
+
+export async function getFacilityTypesApi() {
+  return apiFetch<FacilityTypeDto[]>(`/facilities/types`);
+}
+
 export type FacilityStatus = "active" | "inactive" | "maintenance";
+
+export interface LocationAvailabilitySearchDto {
+  /** Optional: filter by city (uses Location.city) */
+  city?: string;
+  /** Optional: filter by facility type (uses Facility.type) */
+  facility_type?: string;
+  /** ISO datetime for desired start time */
+  start_time: string;
+  /** ISO datetime for desired end time */
+  end_time: string;
+}
+
+export interface AvailableLocationDto {
+  location: Location;
+  /** Facilities at this location that match type & are free in the time window */
+  available_facilities: Facility[];
+}
+
+export async function searchAvailableLocationsApi(
+  params: LocationAvailabilitySearchDto
+) {
+  const query = new URLSearchParams();
+  if (params.city) query.set("city", params.city);
+  if (params.facility_type) query.set("facility_type", params.facility_type);
+  query.set("start_time", params.start_time);
+  query.set("end_time", params.end_time);
+  const qs = query.toString();
+  const path = qs ? `/search/availability?${qs}` : `/search/availability`;
+  return apiFetch<AvailableLocationDto[]>(path);
+}
 
 /** Payload for creating a facility at a location (location is in the URL). */
 export interface CreateFacilityPayload {

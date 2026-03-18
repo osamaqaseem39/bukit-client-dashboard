@@ -120,33 +120,15 @@ export default function UsersPage() {
     user: AdminUserSummary,
     moduleKey: DashboardModuleKey
   ) {
-    // API may return legacy module keys (cricket, futsal-turf, padel) that we normalize to "arena"
-    const legacyArenaKeys = ["cricket", "futsal-turf", "padel"] as const;
-    type LegacyArenaKey = (typeof legacyArenaKeys)[number];
     const rawModules = (user.modules?.filter(Boolean) ??
-      []) as (DashboardModuleKey | LegacyArenaKey)[];
+      []) as DashboardModuleKey[];
 
-    const currentModules = new Set<DashboardModuleKey>();
-    for (const mod of rawModules) {
-      if (mod === "cricket" || mod === "futsal-turf" || mod === "padel") {
-        currentModules.add("arena");
-      } else {
-        currentModules.add(mod);
-      }
-    }
+    const currentModules = new Set<DashboardModuleKey>(rawModules);
 
-    if (moduleKey === "arena") {
-      if (currentModules.has("arena")) {
-        currentModules.delete("arena");
-      } else {
-        currentModules.add("arena");
-      }
+    if (currentModules.has(moduleKey)) {
+      currentModules.delete(moduleKey);
     } else {
-      if (currentModules.has(moduleKey)) {
-        currentModules.delete(moduleKey);
-      } else {
-        currentModules.add(moduleKey);
-      }
+      currentModules.add(moduleKey);
     }
 
     const nextModules =
