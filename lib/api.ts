@@ -165,6 +165,10 @@ export async function registerApi(data: {
 
 export type DashboardModuleKey =
   | "dashboard-overview"
+  | "gaming"
+  | "snooker"
+  | "table-tennis"
+  | "arena"
   | "locations"
   | "users"
   | "bookings"
@@ -174,6 +178,10 @@ export type DashboardModuleKey =
 /** Single source of truth for dashboard module labels (used in Settings and Users). */
 export const DASHBOARD_MODULES: { key: DashboardModuleKey; label: string }[] = [
   { key: "dashboard-overview", label: "Dashboard overview" },
+  { key: "gaming", label: "Gaming" },
+  { key: "snooker", label: "Snooker" },
+  { key: "table-tennis", label: "Table tennis" },
+  { key: "arena", label: "Arena" },
   { key: "locations", label: "Locations" },
   { key: "users", label: "Users" },
   { key: "bookings", label: "Bookings" },
