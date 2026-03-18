@@ -165,10 +165,6 @@ export async function registerApi(data: {
 
 export type DashboardModuleKey =
   | "dashboard-overview"
-  | "gaming"
-  | "snooker"
-  | "table-tennis"
-  | "arena"
   | "locations"
   | "users"
   | "bookings"
@@ -178,10 +174,6 @@ export type DashboardModuleKey =
 /** Single source of truth for dashboard module labels (used in Settings and Users). */
 export const DASHBOARD_MODULES: { key: DashboardModuleKey; label: string }[] = [
   { key: "dashboard-overview", label: "Dashboard overview" },
-  { key: "gaming", label: "Gaming" },
-  { key: "snooker", label: "Snooker" },
-  { key: "table-tennis", label: "Table tennis" },
-  { key: "arena", label: "Arena" },
   { key: "locations", label: "Locations" },
   { key: "users", label: "Users" },
   { key: "bookings", label: "Bookings" },
@@ -465,37 +457,6 @@ export interface LocationCityDto {
 
 export async function getLocationCitiesApi() {
   return apiFetch<LocationCityDto[]>(`/locations/cities`);
-}
-
-// Gaming facilities
-export type GamingStatus = "active" | "inactive" | "maintenance";
-
-export interface GamingCenter {
-  id: string;
-  client_id: string;
-  admin_id: string;
-  name: string;
-  description?: string | null;
-  phone?: string | null;
-  status: GamingStatus;
-  logo_url?: string | null;
-  cover_image_url?: string | null;
-  amenities?: string[] | null;
-  hourly_rate?: number | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  country?: string | null;
-  postal_code?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export async function getGamingCentersApi(clientId?: string) {
-  const query = clientId ? `?clientId=${encodeURIComponent(clientId)}` : "";
-  return apiFetch<GamingCenter[]>(`/gaming${query}`);
 }
 
 // Client statistics (admin overview)

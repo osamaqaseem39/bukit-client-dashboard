@@ -510,7 +510,7 @@ export default function ClientOnboardingPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">

@@ -518,7 +518,7 @@ export default function DashboardSetupPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 sm:px-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">
@@ -598,124 +598,142 @@ export default function DashboardSetupPage() {
                 {step1Errors.global}
               </div>
             )}
-            <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                label="Company name *"
-                placeholder="e.g. Bukit Gaming Lounge"
-                value={businessForm.companyName}
-                onChange={(e) =>
-                  handleBusinessChange("companyName", e.target.value)
-                }
-                error={step1Errors.fields.companyName ?? undefined}
-              />
-              <Input
-                label="Legal name"
-                placeholder="Registered legal entity name"
-                value={businessForm.legalName}
-                onChange={(e) =>
-                  handleBusinessChange("legalName", e.target.value)
-                }
-              />
-              <Input
-                label="Contact person *"
-                placeholder="Primary contact person"
-                value={businessForm.contactName}
-                onChange={(e) =>
-                  handleBusinessChange("contactName", e.target.value)
-                }
-                error={step1Errors.fields.contactName ?? undefined}
-              />
-              <Input
-                label="Email *"
-                type="email"
-                placeholder="contact@business.com"
-                value={businessForm.email}
-                onChange={(e) =>
-                  handleBusinessChange("email", e.target.value)
-                }
-                error={step1Errors.fields.email ?? undefined}
-              />
-              <Input
-                label="Phone *"
-                placeholder="+1 555 123 4567"
-                value={businessForm.phone}
-                onChange={(e) =>
-                  handleBusinessChange("phone", e.target.value)
-                }
-                error={step1Errors.fields.phone ?? undefined}
-              />
-              {!isEditing && (
+            <div className="grid gap-4 md:grid-cols-12">
+              <div className="md:col-span-6">
                 <Input
-                  label="Admin password *"
-                  type="password"
-                  placeholder="Set an admin password for this business"
-                  value={businessForm.adminPassword}
+                  label="Company name *"
+                  placeholder="e.g. Bukit Gaming Lounge"
+                  value={businessForm.companyName}
                   onChange={(e) =>
-                    handleBusinessChange("adminPassword", e.target.value)
+                    handleBusinessChange("companyName", e.target.value)
                   }
-                  error={step1Errors.fields.adminPassword ?? undefined}
+                  error={step1Errors.fields.companyName ?? undefined}
                 />
+              </div>
+              <div className="md:col-span-6">
+                <Input
+                  label="Legal name"
+                  placeholder="Registered legal entity name"
+                  value={businessForm.legalName}
+                  onChange={(e) =>
+                    handleBusinessChange("legalName", e.target.value)
+                  }
+                />
+              </div>
+              <div className="md:col-span-6">
+                <Input
+                  label="Contact person *"
+                  placeholder="Primary contact person"
+                  value={businessForm.contactName}
+                  onChange={(e) =>
+                    handleBusinessChange("contactName", e.target.value)
+                  }
+                  error={step1Errors.fields.contactName ?? undefined}
+                />
+              </div>
+              <div className="md:col-span-6">
+                <Input
+                  label="Email *"
+                  type="email"
+                  placeholder="contact@business.com"
+                  value={businessForm.email}
+                  onChange={(e) => handleBusinessChange("email", e.target.value)}
+                  error={step1Errors.fields.email ?? undefined}
+                />
+              </div>
+              <div className="md:col-span-6">
+                <Input
+                  label="Phone *"
+                  placeholder="+1 555 123 4567"
+                  value={businessForm.phone}
+                  onChange={(e) => handleBusinessChange("phone", e.target.value)}
+                  error={step1Errors.fields.phone ?? undefined}
+                />
+              </div>
+              {!isEditing && (
+                <div className="md:col-span-6">
+                  <Input
+                    label="Admin password *"
+                    type="password"
+                    placeholder="Set an admin password for this business"
+                    value={businessForm.adminPassword}
+                    onChange={(e) =>
+                      handleBusinessChange("adminPassword", e.target.value)
+                    }
+                    error={step1Errors.fields.adminPassword ?? undefined}
+                  />
+                </div>
               )}
-              <Input
-                label="City *"
-                value={businessForm.city}
-                onChange={(e) =>
-                  handleBusinessChange("city", e.target.value)
-                }
-                error={step1Errors.fields.city ?? undefined}
-              />
-              <Input
-                label="State / Region"
-                placeholder="State or province"
-                value={businessForm.state}
-                onChange={(e) =>
-                  handleBusinessChange("state", e.target.value)
-                }
-              />
-              <Input
-                label="Country *"
-                value={businessForm.country}
-                onChange={(e) =>
-                  handleBusinessChange("country", e.target.value)
-                }
-                error={step1Errors.fields.country ?? undefined}
-              />
-              <Input
-                label="Postal code"
-                placeholder="ZIP or postal code"
-                value={businessForm.postalCode}
-                onChange={(e) =>
-                  handleBusinessChange("postalCode", e.target.value)
-                }
-              />
-              <Input
-                label="Tax ID"
-                placeholder="Tax identification number"
-                value={businessForm.taxId}
-                onChange={(e) =>
-                  handleBusinessChange("taxId", e.target.value)
-                }
-              />
-              <Input
-                label="Registration number"
-                placeholder="Company registration number"
-                value={businessForm.registrationNumber}
-                onChange={(e) =>
-                  handleBusinessChange("registrationNumber", e.target.value)
-                }
-              />
-              <ImageUpload
-                label="Logo"
-                value={businessForm.logoUrl || undefined}
-                onChange={(url) => handleBusinessChange("logoUrl", url)}
-                variant="logo"
-              />
-              <ImageUpload
-                label="Cover image"
-                value={businessForm.coverImageUrl || undefined}
-                onChange={(url) => handleBusinessChange("coverImageUrl", url)}
-                variant="cover"
-              />
+              <div className="md:col-span-4">
+                <Input
+                  label="City *"
+                  value={businessForm.city}
+                  onChange={(e) => handleBusinessChange("city", e.target.value)}
+                  error={step1Errors.fields.city ?? undefined}
+                />
+              </div>
+              <div className="md:col-span-4">
+                <Input
+                  label="State / Region"
+                  placeholder="State or province"
+                  value={businessForm.state}
+                  onChange={(e) => handleBusinessChange("state", e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-4">
+                <Input
+                  label="Country *"
+                  value={businessForm.country}
+                  onChange={(e) =>
+                    handleBusinessChange("country", e.target.value)
+                  }
+                  error={step1Errors.fields.country ?? undefined}
+                />
+              </div>
+              <div className="md:col-span-4">
+                <Input
+                  label="Postal code"
+                  placeholder="ZIP or postal code"
+                  value={businessForm.postalCode}
+                  onChange={(e) =>
+                    handleBusinessChange("postalCode", e.target.value)
+                  }
+                />
+              </div>
+              <div className="md:col-span-4">
+                <Input
+                  label="Tax ID"
+                  placeholder="Tax identification number"
+                  value={businessForm.taxId}
+                  onChange={(e) => handleBusinessChange("taxId", e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-4">
+                <Input
+                  label="Registration number"
+                  placeholder="Company registration number"
+                  value={businessForm.registrationNumber}
+                  onChange={(e) =>
+                    handleBusinessChange("registrationNumber", e.target.value)
+                  }
+                />
+              </div>
+              <div className="md:col-span-6">
+                <ImageUpload
+                  label="Logo"
+                  value={businessForm.logoUrl || undefined}
+                  onChange={(url) => handleBusinessChange("logoUrl", url)}
+                  variant="logo"
+                />
+              </div>
+              <div className="md:col-span-6">
+                <ImageUpload
+                  label="Cover image"
+                  value={businessForm.coverImageUrl || undefined}
+                  onChange={(url) => handleBusinessChange("coverImageUrl", url)}
+                  variant="cover"
+                />
+              </div>
             </div>
             <Input
               label="Description"
@@ -788,109 +806,129 @@ export default function DashboardSetupPage() {
                     )}
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Input
-                      label="Location name *"
-                      placeholder="e.g. Downtown Branch"
-                      value={loc.name}
-                      onChange={(e) =>
-                        handleLocationChange(index, "name", e.target.value)
-                      }
-                      error={
-                        step2Errors.fields[`${index}.name`] ?? undefined
-                      }
-                    />
-                    <Input
-                      label="Phone"
-                      placeholder="+1 555 123 4567"
-                      value={loc.phone || ""}
-                      onChange={(e) =>
-                        handleLocationChange(index, "phone", e.target.value)
-                      }
-                    />
-                    <Input
-                      label="Address"
-                      placeholder="Street and number"
-                      value={loc.address || ""}
-                      onChange={(e) =>
-                        handleLocationChange(index, "address", e.target.value)
-                      }
-                    />
-                    <Input
-                      label="City *"
-                      value={loc.city || ""}
-                      onChange={(e) =>
-                        handleLocationChange(index, "city", e.target.value)
-                      }
-                      error={step2Errors.fields[`${index}.city`] ?? undefined}
-                    />
-                    <Input
-                      label="State / Region"
-                      value={loc.state || ""}
-                      onChange={(e) =>
-                        handleLocationChange(index, "state", e.target.value)
-                      }
-                    />
-                    <Input
-                      label="Country *"
-                      value={loc.country || ""}
-                      onChange={(e) =>
-                        handleLocationChange(index, "country", e.target.value)
-                      }
-                      error={
-                        step2Errors.fields[`${index}.country`] ?? undefined
-                      }
-                    />
-                    <Input
-                      label="Postal code"
-                      placeholder="ZIP or postal code"
-                      value={loc.postal_code || ""}
-                      onChange={(e) =>
-                        handleLocationChange(index, "postal_code", e.target.value)
-                      }
-                    />
-                    <Input
-                      label="Latitude"
-                      placeholder="Between -90 and 90"
-                      type="number"
-                      step="any"
-                      min="-90"
-                      max="90"
-                      value={
-                        typeof loc.latitude === "number"
-                          ? String(loc.latitude)
-                          : ""
-                      }
-                      onChange={(e) =>
-                        handleLocationChange(index, "latitude", e.target.value)
-                      }
-                      error={
-                        step2Errors.fields[`${index}.latitude`] ?? undefined
-                      }
-                    />
-                    <Input
-                      label="Longitude"
-                      placeholder="Between -180 and 180"
-                      type="number"
-                      step="any"
-                      min="-180"
-                      max="180"
-                      value={
-                        typeof loc.longitude === "number"
-                          ? String(loc.longitude)
-                          : ""
-                      }
-                      onChange={(e) =>
-                        handleLocationChange(
-                          index,
-                          "longitude",
-                          e.target.value
-                        )
-                      }
-                      error={
-                        step2Errors.fields[`${index}.longitude`] ?? undefined
-                      }
-                    />
+                  <div className="grid gap-4 md:grid-cols-12">
+                    <div className="md:col-span-6">
+                      <Input
+                        label="Location name *"
+                        placeholder="e.g. Downtown Branch"
+                        value={loc.name}
+                        onChange={(e) =>
+                          handleLocationChange(index, "name", e.target.value)
+                        }
+                        error={step2Errors.fields[`${index}.name`] ?? undefined}
+                      />
+                    </div>
+                    <div className="md:col-span-6">
+                      <Input
+                        label="Phone"
+                        placeholder="+1 555 123 4567"
+                        value={loc.phone || ""}
+                        onChange={(e) =>
+                          handleLocationChange(index, "phone", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-8">
+                      <Input
+                        label="Address"
+                        placeholder="Street and number"
+                        value={loc.address || ""}
+                        onChange={(e) =>
+                          handleLocationChange(index, "address", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-4">
+                      <Input
+                        label="City *"
+                        value={loc.city || ""}
+                        onChange={(e) =>
+                          handleLocationChange(index, "city", e.target.value)
+                        }
+                        error={step2Errors.fields[`${index}.city`] ?? undefined}
+                      />
+                    </div>
+                    <div className="md:col-span-4">
+                      <Input
+                        label="State / Region"
+                        value={loc.state || ""}
+                        onChange={(e) =>
+                          handleLocationChange(index, "state", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-4">
+                      <Input
+                        label="Country *"
+                        value={loc.country || ""}
+                        onChange={(e) =>
+                          handleLocationChange(index, "country", e.target.value)
+                        }
+                        error={
+                          step2Errors.fields[`${index}.country`] ?? undefined
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-4">
+                      <Input
+                        label="Postal code"
+                        placeholder="ZIP or postal code"
+                        value={loc.postal_code || ""}
+                        onChange={(e) =>
+                          handleLocationChange(
+                            index,
+                            "postal_code",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-6">
+                      <Input
+                        label="Latitude"
+                        placeholder="Between -90 and 90"
+                        type="number"
+                        step="any"
+                        min="-90"
+                        max="90"
+                        value={
+                          typeof loc.latitude === "number"
+                            ? String(loc.latitude)
+                            : ""
+                        }
+                        onChange={(e) =>
+                          handleLocationChange(index, "latitude", e.target.value)
+                        }
+                        error={
+                          step2Errors.fields[`${index}.latitude`] ?? undefined
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-6">
+                      <Input
+                        label="Longitude"
+                        placeholder="Between -180 and 180"
+                        type="number"
+                        step="any"
+                        min="-180"
+                        max="180"
+                        value={
+                          typeof loc.longitude === "number"
+                            ? String(loc.longitude)
+                            : ""
+                        }
+                        onChange={(e) =>
+                          handleLocationChange(
+                            index,
+                            "longitude",
+                            e.target.value
+                          )
+                        }
+                        error={
+                          step2Errors.fields[`${index}.longitude`] ?? undefined
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-4">

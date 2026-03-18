@@ -468,7 +468,7 @@ export default function FacilitiesPage() {
 
       {/* Add/Edit Facility form – inline on page */}
       {showForm && (
-        <Card>
+        <Card className="mx-auto w-full max-w-4xl">
           <CardHeader>
             <h2 className="text-lg font-medium text-text-primary">
               {editingFacility ? "Edit Facility" : "Add Facility"}

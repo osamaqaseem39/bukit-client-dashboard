@@ -289,7 +289,7 @@ export default function NewBookingPage() {
       : "rounded-lg border-2 border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50";
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-text-primary">
           New walk-in booking
