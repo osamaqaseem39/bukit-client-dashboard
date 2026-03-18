@@ -52,6 +52,23 @@ interface PcEntry {
 
 interface StationEntry {
   label: string;
+  screenSizeInches: string;
+}
+
+interface FacilityPackageEntry {
+  id: string;
+  title: string;
+  minutes: string;
+  price: string;
+  currency: string;
+  validityHours: string;
+}
+
+interface PerMinutePricingState {
+  ratePerMinute: string;
+  currency: string;
+  billingIntervalMinutes: string;
+  minimumMinutes: string;
 }
 
 interface FacilityFormState {
@@ -63,8 +80,14 @@ interface FacilityFormState {
   pcs: PcEntry[];
   /** For ps4 / ps5 / xbox */
   stations: StationEntry[];
-  screenSizeInches: string;
   gamesAvailable: string;
+  pricingPerMinute: PerMinutePricingState;
+  pricingPackages: FacilityPackageEntry[];
+}
+
+function makeId(prefix: string) {
+  // Avoid relying on crypto.randomUUID in older browsers.
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 export default function FacilitiesPage() {
@@ -87,9 +110,15 @@ export default function FacilitiesPage() {
     status: "active",
     capacity: null,
     pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
-    stations: [{ label: "Station 1" }],
-    screenSizeInches: "",
+    stations: [{ label: "Station 1", screenSizeInches: "" }],
     gamesAvailable: "",
+    pricingPerMinute: {
+      ratePerMinute: "",
+      currency: "PKR",
+      billingIntervalMinutes: "10",
+      minimumMinutes: "",
+    },
+    pricingPackages: [],
   });
 
   useEffect(() => {
@@ -141,9 +170,15 @@ export default function FacilitiesPage() {
       status: "active",
       capacity: null,
       pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
-      stations: [{ label: "Station 1" }],
-      screenSizeInches: "",
+      stations: [{ label: "Station 1", screenSizeInches: "" }],
       gamesAvailable: "",
+      pricingPerMinute: {
+        ratePerMinute: "",
+        currency: "PKR",
+        billingIntervalMinutes: "10",
+        minimumMinutes: "",
+      },
+      pricingPackages: [],
     });
     setShowForm(true);
   }
@@ -167,8 +202,53 @@ export default function FacilitiesPage() {
       stationsRaw.length > 0
         ? stationsRaw.map((s: any) => ({
             label: typeof s === "string" ? s : s?.label ?? "",
+            screenSizeInches:
+              typeof s === "object" && s
+                ? s?.screen_size_inches != null
+                  ? String(s.screen_size_inches)
+                  : meta.screen_size_inches != null
+                  ? String(meta.screen_size_inches)
+                  : ""
+                : meta.screen_size_inches != null
+                ? String(meta.screen_size_inches)
+                : "",
           }))
-        : [{ label: "Station 1" }];
+        : [
+            {
+              label: "Station 1",
+              screenSizeInches:
+                meta.screen_size_inches != null ? String(meta.screen_size_inches) : "",
+            },
+          ];
+    const pricing = (meta as any)?.pricing || {};
+    const per = pricing?.per_minute;
+    const pricingPerMinute: PerMinutePricingState = {
+      ratePerMinute:
+        per?.rate_per_minute != null && !Number.isNaN(Number(per.rate_per_minute))
+          ? String(per.rate_per_minute)
+          : "",
+      currency: typeof per?.currency === "string" && per.currency ? per.currency : "PKR",
+      billingIntervalMinutes:
+        per?.billing_interval_minutes != null &&
+        !Number.isNaN(Number(per.billing_interval_minutes))
+          ? String(per.billing_interval_minutes)
+          : "10",
+      minimumMinutes:
+        per?.minimum_minutes != null && !Number.isNaN(Number(per.minimum_minutes))
+          ? String(per.minimum_minutes)
+          : "",
+    };
+
+    const packagesRaw = Array.isArray(pricing?.packages) ? pricing.packages : [];
+    const pricingPackages: FacilityPackageEntry[] = packagesRaw.map((p: any) => ({
+      id: String(p?.id || makeId("pkg")),
+      title: String(p?.title ?? ""),
+      minutes: p?.minutes != null ? String(p.minutes) : "",
+      price: p?.price != null ? String(p.price) : "",
+      currency: typeof p?.currency === "string" && p.currency ? p.currency : pricingPerMinute.currency || "PKR",
+      validityHours: p?.validity_hours != null ? String(p.validity_hours) : "",
+    }));
+
     setFormState({
       name: facility.name,
       type: (facility.type as FacilityTypeValue) || "gaming-pc",
@@ -177,9 +257,9 @@ export default function FacilitiesPage() {
         typeof facility.capacity === "number" ? facility.capacity : null,
       pcs,
       stations,
-      screenSizeInches:
-        meta.screen_size_inches != null ? String(meta.screen_size_inches) : "",
       gamesAvailable: meta.games_available ?? "",
+      pricingPerMinute,
+      pricingPackages,
     });
     setShowForm(true);
   }
@@ -190,8 +270,14 @@ export default function FacilitiesPage() {
   }
 
   function buildMetadata(): Record<string, any> | undefined {
-    const { type, pcs, stations, screenSizeInches, gamesAvailable } =
-      formState;
+    const {
+      type,
+      pcs,
+      stations,
+      gamesAvailable,
+      pricingPerMinute,
+      pricingPackages,
+    } = formState;
     const meta: Record<string, any> = {};
 
     if (type === "gaming-pc" && pcs.length > 0) {
@@ -224,15 +310,77 @@ export default function FacilitiesPage() {
       stations.length > 0
     ) {
       const list = stations
-        .map((s) => (s.label || "").trim())
+        .map((s) => {
+          const label = (s.label || "").trim();
+          const screenStr = (s.screenSizeInches || "").trim();
+          if (!label && !screenStr) return null;
+          const screenNum = screenStr ? Number(screenStr) : undefined;
+          return {
+            label: label || undefined,
+            screen_size_inches:
+              screenNum != null && !Number.isNaN(screenNum) ? screenNum : undefined,
+          };
+        })
         .filter(Boolean);
       if (list.length) meta.stations = list;
-      const screenNum = screenSizeInches.trim()
-        ? Number(screenSizeInches)
-        : undefined;
-      if (screenNum != null && !Number.isNaN(screenNum))
-        meta.screen_size_inches = screenNum;
       if ((gamesAvailable || "").trim()) meta.games_available = gamesAvailable.trim();
+    }
+
+    // Pricing (mainly for gaming facilities)
+    const packages = (pricingPackages || [])
+      .map((p) => {
+        const title = (p.title || "").trim();
+        const minutes = p.minutes.trim() ? Number(p.minutes) : NaN;
+        const price = p.price.trim() ? Number(p.price) : NaN;
+        const currency = (p.currency || "").trim();
+        const validity_hours = p.validityHours.trim()
+          ? Number(p.validityHours)
+          : undefined;
+        if (!title && !p.minutes.trim() && !p.price.trim() && !currency) return null;
+        return {
+          id: p.id || makeId("pkg"),
+          title: title || undefined,
+          minutes: Number.isFinite(minutes) && minutes > 0 ? minutes : undefined,
+          price: Number.isFinite(price) && price >= 0 ? price : undefined,
+          currency: currency || undefined,
+          validity_hours:
+            validity_hours != null && Number.isFinite(validity_hours) && validity_hours > 0
+              ? validity_hours
+              : undefined,
+        };
+      })
+      .filter(Boolean)
+      .filter((p: any) => p.title && p.minutes && p.currency && p.price != null);
+
+    const rate = pricingPerMinute.ratePerMinute.trim()
+      ? Number(pricingPerMinute.ratePerMinute)
+      : NaN;
+    const interval = pricingPerMinute.billingIntervalMinutes.trim()
+      ? Number(pricingPerMinute.billingIntervalMinutes)
+      : NaN;
+    const minMinutes = pricingPerMinute.minimumMinutes.trim()
+      ? Number(pricingPerMinute.minimumMinutes)
+      : undefined;
+    const currency = (pricingPerMinute.currency || "").trim();
+
+    const per_minute =
+      Number.isFinite(rate) && rate >= 0 && Number.isFinite(interval) && interval > 0 && currency
+        ? {
+            rate_per_minute: rate,
+            currency,
+            billing_interval_minutes: interval,
+            minimum_minutes:
+              minMinutes != null && Number.isFinite(minMinutes) && minMinutes >= 0
+                ? minMinutes
+                : undefined,
+          }
+        : undefined;
+
+    if (packages.length || per_minute) {
+      meta.pricing = {
+        ...(packages.length ? { packages } : {}),
+        ...(per_minute ? { per_minute } : {}),
+      };
     }
 
     return Object.keys(meta).length ? meta : undefined;
@@ -522,7 +670,7 @@ export default function FacilitiesPage() {
                           next.stations =
                             prev.stations?.length > 0
                               ? prev.stations
-                              : [{ label: "Station 1" }];
+                              : [{ label: "Station 1", screenSizeInches: "" }];
                         }
                         return next;
                       });
@@ -690,18 +838,6 @@ export default function FacilitiesPage() {
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <Input
-                      label="Screen size (inches)"
-                      type="number"
-                      placeholder="e.g. 32"
-                      value={formState.screenSizeInches}
-                      onChange={(e) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          screenSizeInches: e.target.value,
-                        }))
-                      }
-                    />
-                    <Input
                       label="Games available"
                       placeholder="e.g. FIFA, COD, GTA"
                       value={formState.gamesAvailable}
@@ -729,6 +865,7 @@ export default function FacilitiesPage() {
                               ...prev.stations,
                               {
                                 label: `Station ${prev.stations.length + 1}`,
+                                screenSizeInches: "",
                               },
                             ],
                           }))
@@ -742,40 +879,304 @@ export default function FacilitiesPage() {
                       {formState.stations.map((station, index) => (
                         <div
                           key={index}
-                          className="flex gap-2 rounded-md border border-border bg-white p-2"
+                          className="grid gap-2 rounded-md border border-border bg-white p-3 md:grid-cols-12"
                         >
-                          <Input
-                            label="Label"
-                            placeholder={`Station ${index + 1}`}
-                            value={station.label}
-                            onChange={(e) => {
-                              const stations = [...formState.stations];
-                              stations[index] = {
-                                ...stations[index],
-                                label: e.target.value,
-                              };
-                              setFormState((prev) => ({ ...prev, stations }));
-                            }}
-                            className="flex-1"
-                          />
-                          {formState.stations.length > 1 && (
-                            <button
-                              type="button"
-                              className="mt-6 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface hover:text-text-primary"
-                              onClick={() => {
-                                const stations = formState.stations.filter(
-                                  (_, i) => i !== index
-                                );
+                          <div className="md:col-span-7">
+                            <Input
+                              label="Label"
+                              placeholder={`Station ${index + 1}`}
+                              value={station.label}
+                              onChange={(e) => {
+                                const stations = [...formState.stations];
+                                stations[index] = {
+                                  ...stations[index],
+                                  label: e.target.value,
+                                };
                                 setFormState((prev) => ({ ...prev, stations }));
                               }}
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
+                            />
+                          </div>
+                          <div className="md:col-span-4">
+                            <Input
+                              label="Screen (inches)"
+                              type="number"
+                              placeholder="e.g. 32"
+                              value={station.screenSizeInches}
+                              onChange={(e) => {
+                                const stations = [...formState.stations];
+                                stations[index] = {
+                                  ...stations[index],
+                                  screenSizeInches: e.target.value,
+                                };
+                                setFormState((prev) => ({ ...prev, stations }));
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-end md:col-span-1">
+                            {formState.stations.length > 1 && (
+                              <button
+                                type="button"
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface hover:text-text-primary"
+                                onClick={() => {
+                                  const stations = formState.stations.filter(
+                                    (_, i) => i !== index
+                                  );
+                                  setFormState((prev) => ({ ...prev, stations }));
+                                }}
+                                aria-label="Remove station"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {(formState.type === "gaming-pc" ||
+                formState.type === "ps4" ||
+                formState.type === "ps5" ||
+                formState.type === "xbox") && (
+                <div className="space-y-4 rounded-lg border border-border bg-surface/50 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-text-primary">
+                        Pricing
+                      </div>
+                      <div className="mt-0.5 text-xs text-text-secondary">
+                        Add per-minute pricing and optional packages.
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          pricingPackages: [
+                            ...(prev.pricingPackages || []),
+                            {
+                              id: makeId("pkg"),
+                              title: "",
+                              minutes: "",
+                              price: "",
+                              currency: prev.pricingPerMinute.currency || "PKR",
+                              validityHours: "",
+                            },
+                          ],
+                        }))
+                      }
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add package
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-12">
+                    <div className="md:col-span-4">
+                      <Input
+                        label="Per-minute rate"
+                        type="number"
+                        step="any"
+                        placeholder="e.g. 5"
+                        value={formState.pricingPerMinute.ratePerMinute}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            pricingPerMinute: {
+                              ...prev.pricingPerMinute,
+                              ratePerMinute: e.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <Input
+                        label="Currency"
+                        placeholder="e.g. PKR"
+                        value={formState.pricingPerMinute.currency}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            pricingPerMinute: {
+                              ...prev.pricingPerMinute,
+                              currency: e.target.value.toUpperCase(),
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <Input
+                        label="Billing interval (min)"
+                        type="number"
+                        min={1}
+                        step={1}
+                        placeholder="e.g. 10"
+                        value={formState.pricingPerMinute.billingIntervalMinutes}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            pricingPerMinute: {
+                              ...prev.pricingPerMinute,
+                              billingIntervalMinutes: e.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Input
+                        label="Min minutes"
+                        type="number"
+                        min={0}
+                        step={1}
+                        placeholder="optional"
+                        value={formState.pricingPerMinute.minimumMinutes}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            pricingPerMinute: {
+                              ...prev.pricingPerMinute,
+                              minimumMinutes: e.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {formState.pricingPackages.length > 0 && (
+                    <div className="space-y-2">
+                      {formState.pricingPackages.map((pkg, idx) => (
+                        <div
+                          key={pkg.id || idx}
+                          className="grid gap-2 rounded-md border border-border bg-white p-3 md:grid-cols-12"
+                        >
+                          <div className="md:col-span-4">
+                            <Input
+                              label="Package title"
+                              placeholder="e.g. 1 hour"
+                              value={pkg.title}
+                              onChange={(e) => {
+                                const pricingPackages = [...formState.pricingPackages];
+                                pricingPackages[idx] = {
+                                  ...pricingPackages[idx],
+                                  title: e.target.value,
+                                };
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages,
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Input
+                              label="Minutes"
+                              type="number"
+                              min={1}
+                              step={1}
+                              placeholder="60"
+                              value={pkg.minutes}
+                              onChange={(e) => {
+                                const pricingPackages = [...formState.pricingPackages];
+                                pricingPackages[idx] = {
+                                  ...pricingPackages[idx],
+                                  minutes: e.target.value,
+                                };
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages,
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Input
+                              label="Price"
+                              type="number"
+                              step="any"
+                              placeholder="e.g. 500"
+                              value={pkg.price}
+                              onChange={(e) => {
+                                const pricingPackages = [...formState.pricingPackages];
+                                pricingPackages[idx] = {
+                                  ...pricingPackages[idx],
+                                  price: e.target.value,
+                                };
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages,
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Input
+                              label="Currency"
+                              placeholder="PKR"
+                              value={pkg.currency}
+                              onChange={(e) => {
+                                const pricingPackages = [...formState.pricingPackages];
+                                pricingPackages[idx] = {
+                                  ...pricingPackages[idx],
+                                  currency: e.target.value.toUpperCase(),
+                                };
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages,
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="md:col-span-1">
+                            <Input
+                              label="Valid (h)"
+                              type="number"
+                              min={1}
+                              step={1}
+                              placeholder="optional"
+                              value={pkg.validityHours}
+                              onChange={(e) => {
+                                const pricingPackages = [...formState.pricingPackages];
+                                pricingPackages[idx] = {
+                                  ...pricingPackages[idx],
+                                  validityHours: e.target.value,
+                                };
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages,
+                                }));
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-end md:col-span-1">
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface hover:text-text-primary"
+                              onClick={() => {
+                                const pricingPackages =
+                                  formState.pricingPackages.filter((_, i) => i !== idx);
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages,
+                                }));
+                              }}
+                              aria-label="Remove package"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -49,6 +49,90 @@ function toLocalInput(d: Date) {
   )}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function roundUpToNextFiveMinutes(d: Date): Date {
+  const rounded = new Date(d);
+  rounded.setSeconds(0, 0);
+  const mins = rounded.getMinutes();
+  const next = Math.ceil(mins / 5) * 5;
+  if (next >= 60) {
+    rounded.setHours(rounded.getHours() + 1);
+    rounded.setMinutes(0);
+    return rounded;
+  }
+  rounded.setMinutes(next);
+  return rounded;
+}
+
+type FacilityPackage = {
+  id: string;
+  title: string;
+  minutes: number;
+  price: number;
+  currency: string;
+  validity_hours?: number;
+};
+
+type FacilityPerMinutePricing = {
+  rate_per_minute: number;
+  currency: string;
+  billing_interval_minutes: number;
+  minimum_minutes?: number;
+};
+
+function getFacilityPricing(facility: Facility | null): {
+  packages: FacilityPackage[];
+  perMinute: FacilityPerMinutePricing | null;
+} {
+  const pricing = (facility?.metadata as any)?.pricing;
+  const packagesRaw = Array.isArray(pricing?.packages) ? pricing.packages : [];
+  const packages: FacilityPackage[] = packagesRaw
+    .map((p: any) => ({
+      id: String(p?.id ?? ""),
+      title: String(p?.title ?? ""),
+      minutes: Number(p?.minutes ?? 0),
+      price: Number(p?.price ?? 0),
+      currency: String(p?.currency ?? ""),
+      validity_hours:
+        p?.validity_hours != null ? Number(p.validity_hours) : undefined,
+    }))
+    .filter(
+      (p: FacilityPackage) =>
+        Boolean(p.id) &&
+        Boolean(p.title) &&
+        Number.isFinite(p.minutes) &&
+        p.minutes > 0 &&
+        Number.isFinite(p.price) &&
+        p.price >= 0 &&
+        Boolean(p.currency),
+    );
+
+  const perRaw = pricing?.per_minute;
+  const perMinute: FacilityPerMinutePricing | null =
+    perRaw &&
+    Number.isFinite(Number(perRaw.rate_per_minute)) &&
+    Number.isFinite(Number(perRaw.billing_interval_minutes)) &&
+    Number(perRaw.billing_interval_minutes) > 0 &&
+    String(perRaw.currency || "")
+      ? {
+          rate_per_minute: Number(perRaw.rate_per_minute),
+          currency: String(perRaw.currency),
+          billing_interval_minutes: Number(perRaw.billing_interval_minutes),
+          minimum_minutes:
+            perRaw.minimum_minutes != null
+              ? Number(perRaw.minimum_minutes)
+              : undefined,
+        }
+      : null;
+
+  return { packages, perMinute };
+}
+
+function diffMinutesRoundedUp(start: Date, end: Date): number {
+  const ms = end.getTime() - start.getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
+  return Math.ceil(ms / (60 * 1000));
+}
+
 function formatFacilityType(type: string) {
   const map: Record<string, string> = {
     "gaming-pc": "PC",
@@ -83,6 +167,8 @@ export default function DashboardPage() {
   const [quickEnd, setQuickEnd] = useState<string>("");
   const [quickGuestName, setQuickGuestName] = useState<string>("");
   const [quickGuestPhone, setQuickGuestPhone] = useState<string>("");
+  const [quickSelectedPackageId, setQuickSelectedPackageId] =
+    useState<string>("");
   const [quickSaving, setQuickSaving] = useState(false);
   const [quickError, setQuickError] = useState<string | null>(null);
 
@@ -324,6 +410,32 @@ export default function DashboardPage() {
     try {
       setQuickSaving(true);
       setQuickError(null);
+
+      const { packages, perMinute } = getFacilityPricing(quickBookingFacility);
+      const selectedPackage =
+        quickSelectedPackageId && packages.length
+          ? packages.find((p) => p.id === quickSelectedPackageId) || null
+          : null;
+
+      let amount: number | undefined;
+      let currency: string | undefined;
+
+      if (selectedPackage) {
+        amount = selectedPackage.price;
+        currency = selectedPackage.currency;
+      } else if (perMinute) {
+        const minutes = diffMinutesRoundedUp(startDate, endDate);
+        const interval = perMinute.billing_interval_minutes;
+        const roundedMinutes = Math.ceil(minutes / interval) * interval;
+        const minMinutes =
+          perMinute.minimum_minutes != null && perMinute.minimum_minutes > 0
+            ? perMinute.minimum_minutes
+            : 0;
+        const billable = Math.max(roundedMinutes, minMinutes);
+        amount = billable * perMinute.rate_per_minute;
+        currency = perMinute.currency;
+      }
+
       const newBooking = await createBookingApi({
         location_id: quickBookingFacility.location_id,
         facility_id: quickBookingFacility.id,
@@ -333,6 +445,8 @@ export default function DashboardPage() {
         is_walk_in: true,
         guest_name: quickGuestName || undefined,
         guest_phone: quickGuestPhone || undefined,
+        amount,
+        currency,
       });
       setBookings((prev) => [newBooking, ...prev]);
       setQuickBookingFacility(null);
@@ -340,12 +454,64 @@ export default function DashboardPage() {
       setQuickGuestPhone("");
       setQuickStart("");
       setQuickEnd("");
+      setQuickSelectedPackageId("");
     } catch (err: any) {
       setQuickError(err?.message || "Failed to create booking");
     } finally {
       setQuickSaving(false);
     }
   }
+
+  const quickPricing = useMemo(() => {
+    if (!quickBookingFacility) {
+      return { packages: [] as FacilityPackage[], perMinute: null as FacilityPerMinutePricing | null };
+    }
+    return getFacilityPricing(quickBookingFacility);
+  }, [quickBookingFacility]);
+
+  const quickSelectedPackage = useMemo(() => {
+    if (!quickSelectedPackageId) return null;
+    return quickPricing.packages.find((p) => p.id === quickSelectedPackageId) || null;
+  }, [quickPricing.packages, quickSelectedPackageId]);
+
+  const quickEstimated = useMemo(() => {
+    if (!quickBookingFacility) return null;
+    const startDate = quickStart ? new Date(quickStart) : null;
+    const endDate = quickEnd ? new Date(quickEnd) : null;
+    if (!startDate || !endDate) return null;
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+    if (endDate.getTime() <= startDate.getTime()) return null;
+
+    if (quickSelectedPackage) {
+      return {
+        label: `Package: ${quickSelectedPackage.title}`,
+        amount: quickSelectedPackage.price,
+        currency: quickSelectedPackage.currency,
+      };
+    }
+
+    const perMinute = quickPricing.perMinute;
+    if (!perMinute) return null;
+    const minutes = diffMinutesRoundedUp(startDate, endDate);
+    const interval = perMinute.billing_interval_minutes;
+    const roundedMinutes = Math.ceil(minutes / interval) * interval;
+    const minMinutes =
+      perMinute.minimum_minutes != null && perMinute.minimum_minutes > 0
+        ? perMinute.minimum_minutes
+        : 0;
+    const billable = Math.max(roundedMinutes, minMinutes);
+    return {
+      label: `Per-minute (${perMinute.rate_per_minute}/${perMinute.currency} per min)`,
+      amount: billable * perMinute.rate_per_minute,
+      currency: perMinute.currency,
+    };
+  }, [
+    quickBookingFacility,
+    quickEnd,
+    quickPricing.perMinute,
+    quickSelectedPackage,
+    quickStart,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -492,10 +658,12 @@ export default function DashboardPage() {
                             onClick={() => {
                               setQuickBookingFacility(f);
                               setQuickError(null);
-                              const now = new Date();
-                              const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-                              setQuickStart(toLocalInput(now));
+                              const start = roundUpToNextFiveMinutes(new Date());
+                              const inOneHour = new Date(start.getTime() + 60 * 60 * 1000);
+                              setQuickStart(toLocalInput(start));
                               setQuickEnd(toLocalInput(inOneHour));
+                              const pricing = getFacilityPricing(f);
+                              setQuickSelectedPackageId(pricing.packages[0]?.id || "");
                             }}
                             className={`group relative flex flex-col gap-2 rounded-xl border px-4 py-3 text-left transition ${
                               isBooked
@@ -653,6 +821,60 @@ export default function DashboardPage() {
           size="md"
         >
           <div className="space-y-4">
+            {(quickPricing.packages.length > 0 || quickPricing.perMinute) && (
+              <div className="rounded-lg border border-border bg-muted/30 p-3">
+                {quickPricing.packages.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+                      Packages
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {quickPricing.packages.map((p) => {
+                        const active = p.id === quickSelectedPackageId;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              setQuickSelectedPackageId(p.id);
+                              const startDate = quickStart
+                                ? new Date(quickStart)
+                                : roundUpToNextFiveMinutes(new Date());
+                              if (isNaN(startDate.getTime())) return;
+                              const end = new Date(startDate.getTime() + p.minutes * 60 * 1000);
+                              setQuickStart(toLocalInput(startDate));
+                              setQuickEnd(toLocalInput(end));
+                            }}
+                            className={`rounded-full border px-3 py-1 text-xs transition ${
+                              active
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-background text-text-secondary hover:bg-muted/40"
+                            }`}
+                          >
+                            {p.title} · {p.minutes}m · {p.price} {p.currency}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setQuickSelectedPackageId("")}
+                        className={`rounded-full border px-3 py-1 text-xs transition ${
+                          !quickSelectedPackageId
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-background text-text-secondary hover:bg-muted/40"
+                        }`}
+                      >
+                        No package
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-text-secondary">
+                    Per-minute pricing will be used.
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Input
                 label="Start time"
@@ -667,6 +889,15 @@ export default function DashboardPage() {
                 onChange={(e) => setQuickEnd(e.target.value)}
               />
             </div>
+            {quickEstimated && (
+              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-text-secondary">
+                <span className="font-medium text-text-primary">Estimated:</span>{" "}
+                {quickEstimated.label} —{" "}
+                <span className="font-semibold text-text-primary">
+                  {`${formatCurrency(quickEstimated.amount)} ${quickEstimated.currency}`}
+                </span>
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Input
                 label="Guest name (optional)"

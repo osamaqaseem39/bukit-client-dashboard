@@ -500,7 +500,17 @@ export default function NewBookingPage() {
                   size="sm"
                   variant="secondary"
                   onClick={() =>
-                    setDurationMinutes((prev) => Math.max(0, prev + 30))
+                    setDurationMinutes((prev) => Math.max(15, prev - 30))
+                  }
+                >
+                  - 30 min
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    setDurationMinutes((prev) => Math.max(15, prev + 30))
                   }
                 >
                   + 30 min
