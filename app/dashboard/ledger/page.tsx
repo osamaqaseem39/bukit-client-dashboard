@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import type { Booking, Location, Facility } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export default function LedgerPage() {
   const [date, setDate] = useState<string>(() => {
@@ -34,6 +35,17 @@ export default function LedgerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
+
+  const pathname = usePathname();
+  const allowedFacilityTypes = useMemo(() => {
+    if (pathname.includes("/dashboard/arena")) {
+      return ["futsal-field", "cricket-pitch", "padel-court"];
+    }
+    if (pathname.includes("/dashboard/gaming-zone")) {
+      return ["gaming-pc", "ps4", "ps5", "xbox"];
+    }
+    return null;
+  }, [pathname]);
 
   useEffect(() => {
     let isMounted = true;
@@ -70,7 +82,15 @@ export default function LedgerPage() {
       try {
         const list = await getFacilitiesByLocationApi(locationId);
         if (!isMounted) return;
-        setFacilities(list);
+        const filtered = allowedFacilityTypes
+          ? list.filter((f) => allowedFacilityTypes.includes(f.type))
+          : list;
+        setFacilities(filtered);
+
+        if (allowedFacilityTypes && facilityId) {
+          const stillAllowed = filtered.some((f) => f.id === facilityId);
+          if (!stillAllowed) setFacilityId("");
+        }
       } catch {
         if (isMounted) setFacilities([]);
       }
@@ -79,7 +99,7 @@ export default function LedgerPage() {
     return () => {
       isMounted = false;
     };
-  }, [locationId]);
+  }, [locationId, facilityId, allowedFacilityTypes?.join(",")]);
 
   useEffect(() => {
     let isMounted = true;
@@ -93,7 +113,22 @@ export default function LedgerPage() {
           facility_id: facilityId || undefined,
         });
         if (!isMounted) return;
-        setBookings(data);
+
+        if (allowedFacilityTypes && !facilityId && locationId) {
+          // When facility is not selected, backend returns all facilities at location.
+          // Filter client-side so Arena/Gaming ledgers stay consistent.
+          const facilitiesAtLocation = await getFacilitiesByLocationApi(locationId);
+          const allowedIds = new Set(
+            facilitiesAtLocation
+              .filter((f) => allowedFacilityTypes.includes(f.type))
+              .map((f) => f.id)
+          );
+          setBookings(
+            data.filter((b) => b.facility_id && allowedIds.has(b.facility_id))
+          );
+        } else {
+          setBookings(data);
+        }
       } catch (err: any) {
         if (isMounted) {
           setError(err.message || "Failed to load ledger");
@@ -108,7 +143,7 @@ export default function LedgerPage() {
     return () => {
       isMounted = false;
     };
-  }, [date, locationId, facilityId]);
+  }, [date, locationId, facilityId, allowedFacilityTypes?.join(",")]);
 
   const locationById = useMemo(() => {
     const map = new Map<string, Location>();

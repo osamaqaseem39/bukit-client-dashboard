@@ -168,6 +168,13 @@ export type DashboardModuleKey =
   | "locations"
   | "users"
   | "bookings"
+  | "arena-bookings"
+  | "gaming-zone-bookings"
+  | "arena-analytics"
+  | "gaming-zone-analytics"
+  | "arena-ledger"
+  | "gaming-zone-ledger"
+  | "ledger"
   | "analytics"
   | "settings";
 
@@ -177,6 +184,13 @@ export const DASHBOARD_MODULES: { key: DashboardModuleKey; label: string }[] = [
   { key: "locations", label: "Locations" },
   { key: "users", label: "Users" },
   { key: "bookings", label: "Bookings" },
+  { key: "arena-bookings", label: "Arena bookings" },
+  { key: "gaming-zone-bookings", label: "Gaming zone bookings" },
+  { key: "arena-analytics", label: "Arena analytics" },
+  { key: "gaming-zone-analytics", label: "Gaming zone analytics" },
+  { key: "arena-ledger", label: "Arena ledger" },
+  { key: "gaming-zone-ledger", label: "Gaming zone ledger" },
+  { key: "ledger", label: "Ledger" },
   { key: "analytics", label: "Analytics" },
   { key: "settings", label: "Settings" },
 ];
@@ -333,6 +347,7 @@ export interface Booking {
   user_id: string;
   location_id: string;
   facility_id?: string | null;
+  unit_index?: number | null;
   status: "pending" | "confirmed" | "cancelled";
   start_time: string;
   end_time: string;
@@ -355,6 +370,7 @@ export async function getBookingsApi() {
 export interface CreateBookingPayload {
   location_id: string;
   facility_id?: string;
+  unit_index?: number;
   start_time: string | Date;
   end_time: string | Date;
   status?: "pending" | "confirmed" | "cancelled";
@@ -704,7 +720,6 @@ export interface CreateFacilityPayload {
   name: string;
   type: string;
   status: FacilityStatus;
-  capacity?: number;
   metadata?: Record<string, any>;
 }
 
@@ -721,7 +736,6 @@ export interface Facility {
   name: string;
   type: string;
   status: FacilityStatus;
-  capacity?: number | null;
   metadata?: Record<string, any> | null;
   created_at?: string;
   updated_at?: string;

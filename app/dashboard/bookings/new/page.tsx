@@ -11,7 +11,7 @@ import {
 } from "@/lib/api";
 import type { Location, Facility } from "@/lib/api";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
 /** One bookable unit: either the whole facility or a sub-unit (e.g. PC 1, PC 2). */
@@ -24,8 +24,49 @@ export interface BookableUnit {
   facilityType: string;
 }
 
+function isArenaFacilityType(type: string): boolean {
+  return type === "futsal-field" || type === "cricket-pitch" || type === "padel-court";
+}
+
+function isGamingFacilityType(type: string): boolean {
+  return type === "gaming-pc" || type === "ps4" || type === "ps5" || type === "xbox";
+}
+
 function getUnitsFromFacility(facility: Facility): BookableUnit[] {
   const meta = facility.metadata as Record<string, any> | undefined;
+  if (isArenaFacilityType(facility.type)) {
+    const mode = meta?.court_size_mode;
+    if (mode === "split-two") {
+      return [
+        {
+          facilityId: facility.id,
+          locationId: facility.location_id,
+          unitIndex: 0,
+          label: "Court A",
+          facilityName: facility.name,
+          facilityType: facility.type,
+        },
+        {
+          facilityId: facility.id,
+          locationId: facility.location_id,
+          unitIndex: 1,
+          label: "Court B",
+          facilityName: facility.name,
+          facilityType: facility.type,
+        },
+      ];
+    }
+    return [
+      {
+        facilityId: facility.id,
+        locationId: facility.location_id,
+        unitIndex: 0,
+        label: mode === "double" ? "Double Court" : "Single Court",
+        facilityName: facility.name,
+        facilityType: facility.type,
+      },
+    ];
+  }
   if (facility.type === "gaming-pc" && meta?.pcs && Array.isArray(meta.pcs)) {
     return meta.pcs.map((pc: any, index: number) => ({
       facilityId: facility.id,
@@ -90,10 +131,21 @@ function nextFiveMinTime(): string {
 
 export default function NewBookingPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user } = useAuth();
   const isLocationManager =
     user?.role === "location_manager" && Boolean(user?.managed_location_id);
   const managedLocationId = user?.managed_location_id ?? null;
+
+  const allowedFacilityTypes = useMemo(() => {
+    if (pathname.includes("/dashboard/arena")) {
+      return ["futsal-field", "cricket-pitch", "padel-court"];
+    }
+    if (pathname.includes("/dashboard/gaming-zone")) {
+      return ["gaming-pc", "ps4", "ps5", "xbox"];
+    }
+    return null;
+  }, [pathname]);
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [facilitiesByLocation, setFacilitiesByLocation] = useState<
@@ -156,7 +208,10 @@ export default function NewBookingPage() {
         await Promise.all(
           selectedLocationIds.map(async (locId) => {
             const list = await getFacilitiesByLocationApi(locId);
-            if (isMounted) next[locId] = list;
+            if (!isMounted) return;
+            next[locId] = allowedFacilityTypes
+              ? list.filter((f) => allowedFacilityTypes.includes(f.type))
+              : list;
           })
         );
         if (isMounted) {
@@ -180,7 +235,12 @@ export default function NewBookingPage() {
     return () => {
       isMounted = false;
     };
-  }, [selectedLocationIds.join(","), isLocationManager, managedLocationId]);
+  }, [
+    selectedLocationIds.join(","),
+    isLocationManager,
+    managedLocationId,
+    allowedFacilityTypes?.join(","),
+  ]);
 
   const toggleLocation = (id: string) => {
     setSelectedLocationIds((prev) =>
@@ -205,10 +265,88 @@ export default function NewBookingPage() {
     () => allFacilities.filter((f) => selectedFacilityIds.includes(f.id)),
     [allFacilities, selectedFacilityIds]
   );
+  const allSelectedAreArena = useMemo(
+    () =>
+      selectedFacilities.length > 0 &&
+      selectedFacilities.every((f) => isArenaFacilityType(f.type)),
+    [selectedFacilities]
+  );
+
+  const allSelectedAreGaming = useMemo(
+    () =>
+      selectedFacilities.length > 0 &&
+      selectedFacilities.every((f) => isGamingFacilityType(f.type)),
+    [selectedFacilities]
+  );
 
   const allUnits = useMemo(() => {
     return selectedFacilities.flatMap(getUnitsFromFacility);
   }, [selectedFacilities]);
+
+  const estimatedArenaTotal = useMemo(() => {
+    if (!allSelectedAreArena || selectedUnitKeys.length === 0) return null;
+    const hours = durationMinutes / 60;
+    if (!Number.isFinite(hours) || hours <= 0) return null;
+    const unitsToBook = allUnits.filter((u) => selectedUnitKeys.includes(unitKey(u)));
+    if (unitsToBook.length === 0) return null;
+    let total = 0;
+    let currency = "PKR";
+    for (const unit of unitsToBook) {
+      const facility = selectedFacilities.find((f) => f.id === unit.facilityId);
+      const meta = (facility?.metadata || {}) as Record<string, any>;
+      const rate = Number(meta?.pricing?.per_hour?.rate_per_hour);
+      if (!Number.isFinite(rate) || rate < 0) continue;
+      total += rate * hours;
+      if (typeof meta?.pricing?.per_hour?.currency === "string" && meta.pricing.per_hour.currency) {
+        currency = meta.pricing.per_hour.currency;
+      }
+    }
+    return total > 0 ? { total, currency } : null;
+  }, [allSelectedAreArena, selectedUnitKeys, durationMinutes, allUnits, selectedFacilities]);
+
+  const estimatedGamingTotal = useMemo(() => {
+    if (!allSelectedAreGaming || selectedUnitKeys.length === 0) return null;
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return null;
+
+    const unitsToBook = allUnits.filter((u) => selectedUnitKeys.includes(unitKey(u)));
+    if (unitsToBook.length === 0) return null;
+
+    let total = 0;
+    let currency = "PKR";
+
+    for (const unit of unitsToBook) {
+      const facility = selectedFacilities.find((f) => f.id === unit.facilityId);
+      const meta = (facility?.metadata || {}) as Record<string, any>;
+      const per = meta?.pricing?.per_minute;
+
+      const rate = Number(per?.rate_per_minute);
+      const interval = Number(per?.billing_interval_minutes);
+      const minMinutesRaw =
+        per?.minimum_minutes != null && !Number.isNaN(Number(per.minimum_minutes))
+          ? Number(per.minimum_minutes)
+          : undefined;
+      const minMinutes = minMinutesRaw != null ? minMinutesRaw : 0;
+
+      if (!Number.isFinite(rate) || rate < 0) continue;
+      if (!Number.isFinite(interval) || interval <= 0) continue;
+
+      const roundedMinutes = Math.ceil(durationMinutes / interval) * interval;
+      const billable = Math.max(roundedMinutes, minMinutes);
+      total += billable * rate;
+
+      if (typeof per?.currency === "string" && per.currency) {
+        currency = per.currency;
+      }
+    }
+
+    return total > 0 ? { total, currency } : null;
+  }, [
+    allSelectedAreGaming,
+    selectedUnitKeys,
+    durationMinutes,
+    allUnits,
+    selectedFacilities,
+  ]);
 
   const toggleUnit = (key: string) => {
     setSelectedUnitKeys((prev) =>
@@ -252,21 +390,69 @@ export default function NewBookingPage() {
 
     try {
       for (const unit of unitsToBook) {
+        const facility = selectedFacilities.find((f) => f.id === unit.facilityId);
+        const meta = (facility?.metadata || {}) as Record<string, any>;
+        let amount: number | undefined;
+        let currency: string | undefined;
+
+        if (facility && isArenaFacilityType(facility.type)) {
+          const ratePerHour = Number(meta?.pricing?.per_hour?.rate_per_hour);
+          currency =
+            typeof meta?.pricing?.per_hour?.currency === "string"
+              ? meta.pricing.per_hour.currency
+              : undefined;
+          amount =
+            Number.isFinite(ratePerHour) && ratePerHour >= 0
+              ? ratePerHour * (durationMinutes / 60)
+              : undefined;
+        } else if (facility && isGamingFacilityType(facility.type)) {
+          const per = meta?.pricing?.per_minute;
+          const rate = Number(per?.rate_per_minute);
+          const interval = Number(per?.billing_interval_minutes);
+          const minMinutesRaw =
+            per?.minimum_minutes != null && !Number.isNaN(Number(per.minimum_minutes))
+              ? Number(per.minimum_minutes)
+              : undefined;
+          const minMinutes = minMinutesRaw != null ? minMinutesRaw : 0;
+
+          currency = typeof per?.currency === "string" ? per.currency : undefined;
+
+          if (
+            Number.isFinite(rate) &&
+            rate >= 0 &&
+            Number.isFinite(interval) &&
+            interval > 0 &&
+            currency
+          ) {
+            const roundedMinutes = Math.ceil(durationMinutes / interval) * interval;
+            const billable = Math.max(roundedMinutes, minMinutes);
+            amount = billable * rate;
+          }
+        }
+
         await createBookingApi({
           location_id: unit.locationId,
           facility_id: unit.facilityId,
+          unit_index: unit.unitIndex,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           is_walk_in: true,
           guest_name: guestName,
           guest_phone: guestPhone,
+          amount,
+          currency: currency,
         });
       }
       setSuccess(
         `${unitsToBook.length} walk-in booking(s) created successfully.`
       );
       setTimeout(() => {
-        router.push("/dashboard/bookings");
+        const href = pathname.includes("/dashboard/arena")
+          ? "/dashboard/arena/bookings"
+          : pathname.includes("/dashboard/gaming-zone")
+            ? "/dashboard/gaming-zone/bookings"
+            : "/dashboard/bookings";
+        router.push(href);
       }, 1200);
     } catch (err: any) {
       setError(err.message || "Failed to create booking(s)");
@@ -296,8 +482,8 @@ export default function NewBookingPage() {
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
           {isLocationManager
-            ? "Select units (e.g. PC, PS5), then time and guest. Location and facility are set for you."
-            : "Select locations, facilities and units (e.g. PC, PS5), then time and guest."}
+            ? "Select courts/units, then time and guest. Location and facility are set for you."
+            : "Select locations, facilities and courts/units, then time and guest."}
         </p>
       </div>
 
@@ -320,8 +506,8 @@ export default function NewBookingPage() {
           </h2>
           <p className="mt-1 text-sm text-text-secondary">
             {isLocationManager
-              ? "Choose units (PC, PS5, etc.) and time, then enter guest details. Select multiple units to book at once."
-              : "Choose locations, facilities and units (PC, PS5, etc.) by tapping the buttons; select multiple to book at once."}
+              ? "Choose court units and time, then enter guest details. Select multiple units to book at once."
+              : "Choose locations, facilities and court units by tapping the buttons; select multiple to book at once."}
           </p>
         </CardHeader>
         <CardContent>
@@ -403,12 +589,14 @@ export default function NewBookingPage() {
               </div>
             )}
 
-            {/* Units (PC, PS5, etc.) – button toggles */}
+            {/* Units/Courts – button toggles */}
             {selectedFacilities.length > 0 && allUnits.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Units to book (e.g. PC 1, PC 2, PS5) *
+                    {allSelectedAreArena
+                      ? "Courts to book *"
+                      : "Units to book (e.g. PC 1, PC 2, PS5) *"}
                   </label>
                   <div className="flex gap-2">
                     <Button
@@ -462,7 +650,35 @@ export default function NewBookingPage() {
                 </div>
                 {selectedUnitKeys.length > 0 && (
                   <p className="mt-2 text-sm text-gray-600">
-                    {selectedUnitKeys.length} unit(s) selected — one booking per unit for the same time and guest.
+                    {selectedUnitKeys.length} {allSelectedAreArena ? "court" : "unit"}(s) selected — one booking per {allSelectedAreArena ? "court" : "unit"} for the same time and guest.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {allSelectedAreArena && (
+              <div className="rounded-lg border border-border bg-surface/60 p-4">
+                <div className="text-sm font-medium text-text-primary">Arena walk-in details</div>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Court options follow each facility setup: single court, two separate courts, or one double court.
+                </p>
+                {estimatedArenaTotal && (
+                  <p className="mt-2 text-sm text-text-primary">
+                    Estimated total: {estimatedArenaTotal.currency} {estimatedArenaTotal.total.toFixed(2)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {allSelectedAreGaming && (
+              <div className="rounded-lg border border-border bg-surface/60 p-4">
+                <div className="text-sm font-medium text-text-primary">Gaming zone walk-in details</div>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Billing follows per-minute pricing with interval rounding (and minimum minutes if configured).
+                </p>
+                {estimatedGamingTotal && (
+                  <p className="mt-2 text-sm text-text-primary">
+                    Estimated total: {estimatedGamingTotal.currency} {estimatedGamingTotal.total.toFixed(2)}
                   </p>
                 )}
               </div>
@@ -535,7 +751,14 @@ export default function NewBookingPage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => router.push("/dashboard/bookings")}
+                onClick={() => {
+                  const href = pathname.includes("/dashboard/arena")
+                    ? "/dashboard/arena/bookings"
+                    : pathname.includes("/dashboard/gaming-zone")
+                      ? "/dashboard/gaming-zone/bookings"
+                      : "/dashboard/bookings";
+                  router.push(href);
+                }}
               >
                 Cancel
               </Button>

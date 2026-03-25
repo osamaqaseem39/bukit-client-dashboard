@@ -140,7 +140,6 @@ export default function ClientOnboardingPage() {
       type: "other",
       status: "active",
       location_id: "",
-      capacity: undefined,
     },
   ]);
   const [step3Errors, setStep3Errors] = useState<StepErrorState>(
@@ -239,12 +238,7 @@ export default function ClientOnboardingPage() {
         i === index
           ? {
               ...fac,
-              [field]:
-                field === "capacity"
-                  ? value === ""
-                    ? undefined
-                    : Number(value)
-                  : value,
+              [field]: value,
             }
           : fac
       )
@@ -263,7 +257,6 @@ export default function ClientOnboardingPage() {
         type: "other",
         status: "active",
         location_id: "",
-        capacity: undefined,
       },
     ]);
   }
@@ -494,7 +487,6 @@ export default function ClientOnboardingPage() {
           name: fac.name,
           type: fac.type,
           status: fac.status,
-          capacity: fac.capacity,
           metadata: fac.metadata,
         });
       }
@@ -1005,16 +997,6 @@ export default function ClientOnboardingPage() {
                         </p>
                       )}
                     </div>
-
-                    <Input
-                      label="Capacity"
-                      type="number"
-                      placeholder="Optional number of players/seats"
-                      value={fac.capacity != null ? String(fac.capacity) : ""}
-                      onChange={(e) =>
-                        handleFacilityChange(index, "capacity", e.target.value)
-                      }
-                    />
 
                     <div>
                       <label className="mb-1 block text-xs font-medium text-text-secondary">

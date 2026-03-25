@@ -339,14 +339,6 @@ export default function DashboardSetupPage() {
     return true;
   }
 
-  const GAMING_ZONE_CHILD_TYPES = [
-    "gaming-pc",
-    "vr",
-    "ps5",
-    "ps4",
-    "xbox",
-  ];
-
   const ARENA_CHILD_TYPES = ["futsal-field", "cricket-pitch", "padel-court"];
 
   function toggleFacilityType(index: number, type: string) {
@@ -354,10 +346,9 @@ export default function DashboardSetupPage() {
       const next = [...prev];
       const current = next[index] ?? [];
 
-      // When toggling Arena or Gaming Zone, map them to their underlying facility types
-      if (type === "arena" || type === "gaming-zone") {
-        const childTypes =
-          type === "arena" ? ARENA_CHILD_TYPES : GAMING_ZONE_CHILD_TYPES;
+      // Arena maps to its underlying facility types
+      if (type === "arena") {
+        const childTypes = ARENA_CHILD_TYPES;
 
         const hasAnyChild = childTypes.some((t) => current.includes(t));
 
@@ -937,15 +928,9 @@ export default function DashboardSetupPage() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {[
-                        { value: "gaming-zone", label: "Gaming Zone" },
                         {
                           value: "arena",
                           label: "Arena (Cricket, Futsal, Padel)",
-                        },
-                        { value: "snooker-table", label: "Snooker" },
-                        {
-                          value: "table-tennis-table",
-                          label: "Table Tennis",
                         },
                       ].map((opt) => {
                         const selectedForLocation =
@@ -954,10 +939,6 @@ export default function DashboardSetupPage() {
                         const checked =
                           opt.value === "arena"
                             ? ARENA_CHILD_TYPES.some((t) =>
-                                selectedForLocation.includes(t)
-                              )
-                            : opt.value === "gaming-zone"
-                            ? GAMING_ZONE_CHILD_TYPES.some((t) =>
                                 selectedForLocation.includes(t)
                               )
                             : selectedForLocation.includes(opt.value);

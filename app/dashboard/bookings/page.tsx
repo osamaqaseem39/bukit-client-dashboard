@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import type { Booking, Location, Facility } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -27,6 +28,17 @@ export default function BookingsPage() {
   const [facilityNames, setFacilityNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const pathname = usePathname();
+  const allowedFacilityTypes = useMemo(() => {
+    if (pathname.includes("/dashboard/arena")) {
+      return ["futsal-field", "cricket-pitch", "padel-court"];
+    }
+    if (pathname.includes("/dashboard/gaming-zone")) {
+      return ["gaming-pc", "ps4", "ps5", "xbox"];
+    }
+    return null;
+  }, [pathname]);
 
   useEffect(() => {
     let isMounted = true;
@@ -39,24 +51,36 @@ export default function BookingsPage() {
           getLocationsApi(undefined),
         ]);
         if (!isMounted) return;
-        setBookings(bookingsRes);
         setLocations(locationsRes);
 
         const locationIds = [...new Set(bookingsRes.map((b) => b.location_id))];
         const names: Record<string, string> = {};
+        const typesByFacilityId: Record<string, string> = {};
         await Promise.all(
           locationIds.map(async (locId) => {
             try {
               const facilities = await getFacilitiesByLocationApi(locId);
               facilities.forEach((f: Facility) => {
                 names[f.id] = f.name;
+                typesByFacilityId[f.id] = f.type;
               });
             } catch {
               // ignore per-location errors
             }
           })
         );
-        if (isMounted) setFacilityNames(names);
+
+        const filteredBookings = allowedFacilityTypes
+          ? bookingsRes.filter((b) => {
+              if (!b.facility_id) return false;
+              return allowedFacilityTypes.includes(typesByFacilityId[b.facility_id]);
+            })
+          : bookingsRes;
+
+        if (isMounted) {
+          setBookings(filteredBookings);
+          setFacilityNames(names);
+        }
       } catch (err: any) {
         if (isMounted) setError(err.message || "Failed to load bookings");
       } finally {
@@ -67,7 +91,7 @@ export default function BookingsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [allowedFacilityTypes?.join(",")]);
 
   const locationById = useMemo(() => {
     const map = new Map<string, Location>();
@@ -114,6 +138,12 @@ export default function BookingsPage() {
     return facilityNames[facilityId] ?? facilityId;
   }
 
+  const bookingNewHref = pathname.includes("/dashboard/arena")
+    ? "/dashboard/arena/bookings/new"
+    : pathname.includes("/dashboard/gaming-zone")
+      ? "/dashboard/gaming-zone/bookings/new"
+      : "/dashboard/bookings/new";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -123,7 +153,7 @@ export default function BookingsPage() {
             View bookings for your locations and facilities. Bookings are created in the app from the facilities you add.
           </p>
         </div>
-        <Link href="/dashboard/bookings/new">
+        <Link href={bookingNewHref}>
           <Button variant="primary">New walk-in booking</Button>
         </Link>
       </div>

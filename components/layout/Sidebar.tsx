@@ -48,6 +48,75 @@ const navItems: NavItem[] = [
     icon: <LayoutDashboard className="h-5 w-5" />,
     moduleKey: "dashboard-overview",
   },
+  // Analytics
+  {
+    label: "Analytics",
+    href: "/dashboard/analytics",
+    icon: <BarChart3 className="h-5 w-5" />,
+    roles: ["admin", "client"],
+    moduleKey: "analytics",
+  },
+  {
+    label: "Arena Analytics",
+    href: "/dashboard/arena/analytics",
+    icon: <BarChart3 className="h-5 w-5" />,
+    roles: ["admin", "client"],
+    moduleKey: "arena-analytics",
+  },
+  {
+    label: "Gaming Zone Analytics",
+    href: "/dashboard/gaming-zone/analytics",
+    icon: <BarChart3 className="h-5 w-5" />,
+    roles: ["admin", "client"],
+    moduleKey: "gaming-zone-analytics",
+  },
+
+  // Bookings
+  {
+    label: "Bookings",
+    href: "/dashboard/bookings",
+    icon: <Calendar className="h-5 w-5" />,
+    roles: ["admin", "client", "location_manager"],
+    moduleKey: "bookings",
+  },
+  {
+    label: "Arena Bookings",
+    href: "/dashboard/arena/bookings",
+    icon: <Calendar className="h-5 w-5" />,
+    roles: ["admin", "client", "location_manager"],
+    moduleKey: "arena-bookings",
+  },
+  {
+    label: "Gaming Zone Bookings",
+    href: "/dashboard/gaming-zone/bookings",
+    icon: <Calendar className="h-5 w-5" />,
+    roles: ["admin", "client", "location_manager"],
+    moduleKey: "gaming-zone-bookings",
+  },
+
+  // Ledger
+  {
+    label: "Ledger",
+    href: "/dashboard/ledger",
+    icon: <Table2 className="h-5 w-5" />,
+    roles: ["client", "location_manager"],
+    moduleKey: "ledger",
+  },
+  {
+    label: "Arena Ledger",
+    href: "/dashboard/arena/ledger",
+    icon: <Table2 className="h-5 w-5" />,
+    roles: ["client", "location_manager"],
+    moduleKey: "arena-ledger",
+  },
+  {
+    label: "Gaming Zone Ledger",
+    href: "/dashboard/gaming-zone/ledger",
+    icon: <Table2 className="h-5 w-5" />,
+    roles: ["client", "location_manager"],
+    moduleKey: "gaming-zone-ledger",
+  },
+
   {
     label: "Business Setup",
     href: "/dashboard/setup",
@@ -83,26 +152,6 @@ const navItems: NavItem[] = [
     moduleKey: "users",
   },
   {
-    label: "Bookings",
-    href: "/dashboard/bookings",
-    icon: <Calendar className="h-5 w-5" />,
-    roles: ["admin", "client", "location_manager"],
-    moduleKey: "bookings",
-  },
-  {
-    label: "Ledger",
-    href: "/dashboard/ledger",
-    icon: <Table2 className="h-5 w-5" />,
-    roles: ["client", "location_manager"],
-  },
-  {
-    label: "Analytics",
-    href: "/dashboard/analytics",
-    icon: <BarChart3 className="h-5 w-5" />,
-    roles: ["admin", "client"],
-    moduleKey: "analytics",
-  },
-  {
     label: "Settings",
     href: "/dashboard/settings",
     icon: <Settings className="h-5 w-5" />,
@@ -120,35 +169,32 @@ export default function Sidebar() {
   const effectiveModules = useMemo<DashboardModuleKey[] | null>(() => {
     if (!user) return null;
     if (!user.modules || user.modules.length === 0) {
-      // No explicit assignment -> fall back to role-based navigation
+      // No explicit assignment -> fall back to a minimal default for clients.
+      // This prevents all facility-type (arena/gaming) modules from showing up by default.
+      if (user.role === "client") {
+        return [
+          "dashboard-overview",
+          "analytics",
+          "bookings",
+          "ledger",
+          "locations",
+          "users",
+          "settings",
+        ];
+      }
       return null;
     }
-    return user.modules.filter(Boolean) as DashboardModuleKey[];
+    const modules = user.modules.filter(Boolean) as DashboardModuleKey[];
+    // Dashboard should always be visible when modules are explicitly configured.
+    if (!modules.includes("dashboard-overview")) {
+      modules.unshift("dashboard-overview");
+    }
+    return modules;
   }, [user]);
 
   const visibleNavItems = useMemo(() => {
     if (!user) return navItems;
 
-    // For client dashboard users, show a curated set of items in a specific order:
-    // - Top: Dashboard, Analytics, Bookings, Ledger
-    // - Bottom (pinned): Locations, Facilities, Settings
-    if (user.role === "client") {
-      const clientOrder = [
-        "Dashboard",
-        "Analytics",
-        "Bookings",
-        "Ledger",
-        "Locations",
-        "Facilities",
-        "Settings",
-      ];
-
-      return clientOrder
-        .map((label) => navItems.find((item) => item.label === label))
-        .filter((item): item is NavItem => Boolean(item));
-    }
-
-    // For other roles (admin, super_admin, user) keep existing behavior.
     return navItems;
   }, [user]);
 

@@ -3,7 +3,7 @@
 import React, { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-import { registerApi } from "@/lib/api";
+import { loginApi, registerApi, setAuthTokens } from "@/lib/api";
 
 function SignupPageInner() {
   const router = useRouter();
@@ -30,7 +30,12 @@ function SignupPageInner() {
     setLoading(true);
     try {
       await registerApi({ name: name.trim(), email: email.trim(), password });
-      router.replace("/login");
+      const auth = await loginApi(email.trim(), password);
+      setAuthTokens({
+        accessToken: auth.access_token,
+        refreshToken: auth.refresh_token,
+      });
+      router.replace("/dashboard");
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Registration failed";

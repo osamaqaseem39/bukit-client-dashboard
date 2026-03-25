@@ -362,7 +362,15 @@ export default function SettingsPage() {
                     const hasAccess =
                       (isSuperAdmin() || isAdmin()) ||
                       (isClient() &&
-                        ["dashboard-overview", "bookings", "gaming", "locations", "settings"].includes(
+                        [
+                          "dashboard-overview",
+                          "analytics",
+                          "bookings",
+                          "ledger",
+                          "locations",
+                          "users",
+                          "settings",
+                        ].includes(
                           module.key
                         )) ||
                       (!isSuperAdmin() &&
