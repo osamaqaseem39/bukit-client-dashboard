@@ -91,6 +91,11 @@ interface PricingSlabEntry {
   currency: string;
 }
 
+interface GameEntry {
+  id: string;
+  title: string;
+}
+
 type CourtSizeMode = "single" | "split-two" | "double";
 
 interface ArenaPricingState {
@@ -106,7 +111,7 @@ interface GamingPcFacilityMetadataDto {
     ram?: string;
     refresh_rate_hz?: number;
   }>;
-  games_available?: string;
+  games_available?: string | string[];
   pricing?: {
     per_minute?: {
       rate_per_minute: number;
@@ -137,7 +142,7 @@ interface GamingConsoleFacilityMetadataDto {
     label?: string;
     screen_size_inches?: number;
   }>;
-  games_available?: string;
+  games_available?: string | string[];
   pricing?: GamingPcFacilityMetadataDto["pricing"];
 }
 
@@ -165,7 +170,8 @@ interface FacilityFormState {
   pcs: PcEntry[];
   /** For ps4 / ps5 / xbox */
   stations: StationEntry[];
-  gamesAvailable: string;
+  games: GameEntry[];
+  selectedGameIds: string[];
   pricingPerMinute: PerMinutePricingState;
   pricingPackages: FacilityPackageEntry[];
   selectedPackageIds: string[];
@@ -207,7 +213,8 @@ export default function FacilitiesPage() {
     status: "active",
     pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
     stations: [{ label: "Station 1", screenSizeInches: "" }],
-    gamesAvailable: "",
+    games: [],
+    selectedGameIds: [],
     pricingPerMinute: {
       ratePerMinute: "",
       currency: "PKR",
@@ -295,7 +302,8 @@ export default function FacilitiesPage() {
           screenSizeInches: "",
         },
       ],
-      gamesAvailable: "",
+      games: [],
+      selectedGameIds: [],
       pricingPerMinute: {
         ratePerMinute: "",
         currency: "PKR",
@@ -429,6 +437,21 @@ export default function FacilitiesPage() {
         ? meta.court_size_mode
         : "single";
 
+    const gamesRaw = meta.games_available;
+    const parsedGames =
+      Array.isArray(gamesRaw)
+        ? gamesRaw
+        : typeof gamesRaw === "string"
+          ? gamesRaw
+              .split(",")
+              .map((g) => g.trim())
+              .filter(Boolean)
+          : [];
+    const games: GameEntry[] = parsedGames.map((title: string, idx: number) => ({
+      id: makeId(`game_${idx}`),
+      title,
+    }));
+
     setFormState({
       name: facility.name,
       type: FACILITY_TYPES.some((entry) => entry.value === facility.type)
@@ -437,7 +460,8 @@ export default function FacilitiesPage() {
       status: facility.status,
       pcs,
       stations,
-      gamesAvailable: meta.games_available ?? "",
+      games,
+      selectedGameIds: games.map((g) => g.id),
       pricingPerMinute,
       pricingPackages,
       selectedPackageIds,
@@ -463,7 +487,8 @@ export default function FacilitiesPage() {
       type,
       pcs,
       stations,
-      gamesAvailable,
+      games,
+      selectedGameIds,
       pricingPerMinute,
       pricingPackages,
       selectedPackageIds,
@@ -527,9 +552,13 @@ export default function FacilitiesPage() {
       }
     }
 
-    const games = (gamesAvailable || "").trim();
-    if (games) {
-      meta.games_available = games;
+    const selectedGames = (games || [])
+      .filter((g) => selectedGameIds.includes(g.id))
+      .map((g) => (g.title || "").trim())
+      .filter(Boolean);
+    if (selectedGames.length > 0) {
+      // Keep both array and CSV compatibility for current consumers.
+      meta.games_available = selectedGames;
     }
 
     const packages: NonNullable<GamingPcFacilityMetadataDto["pricing"]>["packages"] =
@@ -1156,17 +1185,87 @@ export default function FacilitiesPage() {
                     </div>
                   )}
 
-                  <Input
-                    label="Games available (comma separated)"
-                    placeholder="e.g. FC 25, Tekken 8, Valorant"
-                    value={formState.gamesAvailable}
-                    onChange={(e) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        gamesAvailable: e.target.value,
-                      }))
-                    }
-                  />
+                  <div className="space-y-2 rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-text-primary">
+                        Games sub form (multi-select)
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          const id = makeId("game");
+                          setFormState((prev) => ({
+                            ...prev,
+                            games: [...prev.games, { id, title: "" }],
+                            selectedGameIds: [...prev.selectedGameIds, id],
+                          }));
+                        }}
+                      >
+                        <Plus className="mr-1 h-4 w-4" />
+                        Add Game
+                      </Button>
+                    </div>
+                    {formState.games.length === 0 && (
+                      <p className="text-xs text-text-secondary">
+                        No games added yet. Add game options and select the ones active for this
+                        facility.
+                      </p>
+                    )}
+                    {formState.games.map((game, idx) => (
+                      <div
+                        key={game.id}
+                        className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-5"
+                      >
+                        <div className="md:col-span-4">
+                          <label className="mb-1 inline-flex items-center gap-2 text-xs font-medium text-text-secondary">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border"
+                              checked={formState.selectedGameIds.includes(game.id)}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  selectedGameIds: e.target.checked
+                                    ? [...prev.selectedGameIds, game.id]
+                                    : prev.selectedGameIds.filter((id) => id !== game.id),
+                                }))
+                              }
+                            />
+                            Select for this facility
+                          </label>
+                          <Input
+                            label="Game title"
+                            placeholder="e.g. FC 25"
+                            value={game.title}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                games: prev.games.map((entry, i) =>
+                                  i === idx ? { ...entry, title: e.target.value } : entry
+                                ),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="flex items-end justify-end">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                games: prev.games.filter((_, i) => i !== idx),
+                                selectedGameIds: prev.selectedGameIds.filter((id) => id !== game.id),
+                              }))
+                            }
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-text-secondary">
