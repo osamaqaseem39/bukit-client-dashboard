@@ -40,6 +40,12 @@ const FACILITY_TYPES = [
 type FacilityTypeValue = (typeof FACILITY_TYPES)[number]["value"];
 const ARENA_FACILITY_TYPES = ["futsal-field", "cricket-pitch", "padel-court"] as const;
 const GAMING_FACILITY_TYPES = ["gaming-pc", "ps4", "ps5", "xbox"] as const;
+const DEFAULT_GAMES_BY_TYPE: Record<string, string[]> = {
+  "gaming-pc": ["Valorant", "CS2", "Dota 2", "PUBG", "Fortnite"],
+  ps4: ["EA FC", "Tekken 7", "Call of Duty", "FIFA 23"],
+  ps5: ["EA FC 25", "Tekken 8", "Spider-Man 2", "Call of Duty"],
+  xbox: ["Forza", "Halo", "EA FC", "Call of Duty"],
+};
 
 function isArenaFacilityType(type: string): type is FacilityTypeValue {
   return (ARENA_FACILITY_TYPES as readonly string[]).includes(type);
@@ -89,11 +95,6 @@ interface PricingSlabEntry {
   maxMinutes: string;
   price: string;
   currency: string;
-}
-
-interface GameEntry {
-  id: string;
-  title: string;
 }
 
 type CourtSizeMode = "single" | "split-two" | "double";
@@ -170,8 +171,7 @@ interface FacilityFormState {
   pcs: PcEntry[];
   /** For ps4 / ps5 / xbox */
   stations: StationEntry[];
-  games: GameEntry[];
-  selectedGameIds: string[];
+  selectedGames: string[];
   pricingPerMinute: PerMinutePricingState;
   pricingPackages: FacilityPackageEntry[];
   selectedPackageIds: string[];
@@ -213,8 +213,7 @@ export default function FacilitiesPage() {
     status: "active",
     pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
     stations: [{ label: "Station 1", screenSizeInches: "" }],
-    games: [],
-    selectedGameIds: [],
+    selectedGames: [],
     pricingPerMinute: {
       ratePerMinute: "",
       currency: "PKR",
@@ -302,8 +301,7 @@ export default function FacilitiesPage() {
           screenSizeInches: "",
         },
       ],
-      games: [],
-      selectedGameIds: [],
+      selectedGames: [],
       pricingPerMinute: {
         ratePerMinute: "",
         currency: "PKR",
@@ -447,11 +445,6 @@ export default function FacilitiesPage() {
               .map((g) => g.trim())
               .filter(Boolean)
           : [];
-    const games: GameEntry[] = parsedGames.map((title: string, idx: number) => ({
-      id: makeId(`game_${idx}`),
-      title,
-    }));
-
     setFormState({
       name: facility.name,
       type: FACILITY_TYPES.some((entry) => entry.value === facility.type)
@@ -460,8 +453,7 @@ export default function FacilitiesPage() {
       status: facility.status,
       pcs,
       stations,
-      games,
-      selectedGameIds: games.map((g) => g.id),
+      selectedGames: parsedGames,
       pricingPerMinute,
       pricingPackages,
       selectedPackageIds,
@@ -487,8 +479,7 @@ export default function FacilitiesPage() {
       type,
       pcs,
       stations,
-      games,
-      selectedGameIds,
+      selectedGames,
       pricingPerMinute,
       pricingPackages,
       selectedPackageIds,
@@ -552,13 +543,12 @@ export default function FacilitiesPage() {
       }
     }
 
-    const selectedGames = (games || [])
-      .filter((g) => selectedGameIds.includes(g.id))
-      .map((g) => (g.title || "").trim())
+    const cleanGames = (selectedGames || [])
+      .map((g) => (g || "").trim())
       .filter(Boolean);
-    if (selectedGames.length > 0) {
+    if (cleanGames.length > 0) {
       // Keep both array and CSV compatibility for current consumers.
-      meta.games_available = selectedGames;
+      meta.games_available = cleanGames;
     }
 
     const packages: NonNullable<GamingPcFacilityMetadataDto["pricing"]>["packages"] =
@@ -1186,85 +1176,32 @@ export default function FacilitiesPage() {
                   )}
 
                   <div className="space-y-2 rounded-md border border-border p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium text-text-primary">
-                        Games sub form (multi-select)
-                      </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          const id = makeId("game");
-                          setFormState((prev) => ({
-                            ...prev,
-                            games: [...prev.games, { id, title: "" }],
-                            selectedGameIds: [...prev.selectedGameIds, id],
-                          }));
-                        }}
-                      >
-                        <Plus className="mr-1 h-4 w-4" />
-                        Add Game
-                      </Button>
-                    </div>
-                    {formState.games.length === 0 && (
-                      <p className="text-xs text-text-secondary">
-                        No games added yet. Add game options and select the ones active for this
-                        facility.
-                      </p>
-                    )}
-                    {formState.games.map((game, idx) => (
-                      <div
-                        key={game.id}
-                        className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-5"
-                      >
-                        <div className="md:col-span-4">
-                          <label className="mb-1 inline-flex items-center gap-2 text-xs font-medium text-text-secondary">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border"
-                              checked={formState.selectedGameIds.includes(game.id)}
-                              onChange={(e) =>
-                                setFormState((prev) => ({
-                                  ...prev,
-                                  selectedGameIds: e.target.checked
-                                    ? [...prev.selectedGameIds, game.id]
-                                    : prev.selectedGameIds.filter((id) => id !== game.id),
-                                }))
-                              }
-                            />
-                            Select for this facility
-                          </label>
-                          <Input
-                            label="Game title"
-                            placeholder="e.g. FC 25"
-                            value={game.title}
-                            onChange={(e) =>
-                              setFormState((prev) => ({
-                                ...prev,
-                                games: prev.games.map((entry, i) =>
-                                  i === idx ? { ...entry, title: e.target.value } : entry
-                                ),
-                              }))
-                            }
-                          />
-                        </div>
-                        <div className="flex items-end justify-end">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() =>
-                              setFormState((prev) => ({
-                                ...prev,
-                                games: prev.games.filter((_, i) => i !== idx),
-                                selectedGameIds: prev.selectedGameIds.filter((id) => id !== game.id),
-                              }))
-                            }
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                    <div className="text-sm font-medium text-text-primary">Games</div>
+                    <p className="text-xs text-text-secondary">
+                      Multi-select games for this facility.
+                    </p>
+                    <select
+                      multiple
+                      className="min-h-[140px] w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                      value={formState.selectedGames}
+                      onChange={(e) => {
+                        const values = Array.from(e.target.selectedOptions).map(
+                          (opt) => opt.value
+                        );
+                        setFormState((prev) => ({ ...prev, selectedGames: values }));
+                      }}
+                    >
+                      {Array.from(
+                        new Set([
+                          ...(DEFAULT_GAMES_BY_TYPE[formState.type] || []),
+                          ...formState.selectedGames,
+                        ])
+                      ).map((game) => (
+                        <option key={game} value={game}>
+                          {game}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-1">
