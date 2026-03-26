@@ -81,6 +81,15 @@ interface PerMinutePricingState {
   billingIntervalMinutes: string;
   minimumMinutes: string;
 }
+type GamingPricingMode = "per-minute" | "slabs";
+
+interface PricingSlabEntry {
+  id: string;
+  minMinutes: string;
+  maxMinutes: string;
+  price: string;
+  currency: string;
+}
 
 type CourtSizeMode = "single" | "split-two" | "double";
 
@@ -112,6 +121,13 @@ interface GamingPcFacilityMetadataDto {
       price: number;
       currency: string;
       validity_hours?: number;
+    }>;
+    slabs?: Array<{
+      id: string;
+      min_minutes: number;
+      max_minutes: number;
+      price: number;
+      currency: string;
     }>;
   };
 }
@@ -152,6 +168,9 @@ interface FacilityFormState {
   gamesAvailable: string;
   pricingPerMinute: PerMinutePricingState;
   pricingPackages: FacilityPackageEntry[];
+  selectedPackageIds: string[];
+  pricingMode: GamingPricingMode;
+  pricingSlabs: PricingSlabEntry[];
   arenaDimensions: {
     height: string;
     length: string;
@@ -178,6 +197,7 @@ export default function FacilitiesPage() {
   const [loadingFacilities, setLoadingFacilities] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
@@ -197,6 +217,9 @@ export default function FacilitiesPage() {
       minimumMinutes: "",
     },
     pricingPackages: [],
+    selectedPackageIds: [],
+    pricingMode: "per-minute",
+    pricingSlabs: [],
     arenaDimensions: {
       height: "",
       length: "",
@@ -251,17 +274,30 @@ export default function FacilitiesPage() {
     }
   }
 
-  function openCreateForm() {
+  function openCreateForm(type?: FacilityTypeValue) {
     setFormMode("basic");
     setEditingFacility(null);
-    const defaultType = (allowedFacilityTypesForLocation[0] ||
+    const defaultType = (type ||
+      allowedFacilityTypesForLocation[0] ||
       "futsal-field") as FacilityTypeValue;
     setFormState({
       name: "",
       type: defaultType,
       status: "active",
       pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
-      stations: [{ label: "Station 1", screenSizeInches: "" }],
+      stations: [
+        {
+          label:
+            defaultType === "ps4"
+              ? "PS4 Station"
+              : defaultType === "ps5"
+                ? "PS5 Station"
+                : defaultType === "xbox"
+                  ? "Xbox Station"
+                  : "Station 1",
+          screenSizeInches: "",
+        },
+      ],
       gamesAvailable: "",
       pricingPerMinute: {
         ratePerMinute: "",
@@ -270,6 +306,9 @@ export default function FacilitiesPage() {
         minimumMinutes: "",
       },
       pricingPackages: [],
+      selectedPackageIds: [],
+      pricingMode: "per-minute",
+      pricingSlabs: [],
       arenaDimensions: {
         height: "",
         length: "",
@@ -365,6 +404,19 @@ export default function FacilitiesPage() {
       currency: typeof p?.currency === "string" && p.currency ? p.currency : pricingPerMinute.currency || "PKR",
       validityHours: p?.validity_hours != null ? String(p.validity_hours) : "",
     }));
+    const selectedPackageIds =
+      pricingPackages.length > 0 ? pricingPackages.map((p) => p.id) : [];
+    const slabsRaw = Array.isArray(pricing?.slabs) ? pricing.slabs : [];
+    const pricingSlabs: PricingSlabEntry[] = slabsRaw.map((s: any) => ({
+      id: String(s?.id || makeId("slab")),
+      minMinutes: s?.min_minutes != null ? String(s.min_minutes) : "",
+      maxMinutes: s?.max_minutes != null ? String(s.max_minutes) : "",
+      price: s?.price != null ? String(s.price) : "",
+      currency:
+        typeof s?.currency === "string" && s.currency
+          ? s.currency
+          : pricingPerMinute.currency || "PKR",
+    }));
 
     const arenaDimensionsRaw = meta?.arena_dimensions || {};
     const arenaDimensions = {
@@ -406,6 +458,9 @@ export default function FacilitiesPage() {
       gamesAvailable: meta.games_available ?? "",
       pricingPerMinute,
       pricingPackages,
+      selectedPackageIds,
+      pricingMode: slabsRaw.length > 0 ? "slabs" : "per-minute",
+      pricingSlabs,
       arenaDimensions,
       arenaPricing,
       courtSizeMode,
@@ -430,12 +485,16 @@ export default function FacilitiesPage() {
       gamesAvailable,
       pricingPerMinute,
       pricingPackages,
+      selectedPackageIds,
+      pricingMode,
+      pricingSlabs,
     } = formState;
     if (!isGamingFacilityType(type)) return undefined;
     const meta: GamingPcFacilityMetadataDto | GamingConsoleFacilityMetadataDto = {};
 
     if (isPcFacilityType(type)) {
       const cleanPcs = (pcs || [])
+        .slice(0, 1)
         .map((pc) => ({
           label: (pc.label || "").trim(),
           cpu: (pc.cpu || "").trim(),
@@ -463,6 +522,7 @@ export default function FacilitiesPage() {
       }
     } else {
       const cleanStations = (stations || [])
+        .slice(0, 1)
         .map((station) => ({
           label: (station.label || "").trim(),
           screen_size_inches: station.screenSizeInches.trim()
@@ -555,10 +615,44 @@ export default function FacilitiesPage() {
           }
         : undefined;
 
-    if (packages.length || per_minute) {
+    const slabs: NonNullable<GamingPcFacilityMetadataDto["pricing"]>["slabs"] = [];
+    for (const slab of pricingSlabs || []) {
+      const minMinutes = slab.minMinutes.trim() ? Number(slab.minMinutes) : NaN;
+      const maxMinutes = slab.maxMinutes.trim() ? Number(slab.maxMinutes) : NaN;
+      const price = slab.price.trim() ? Number(slab.price) : NaN;
+      const currency = (slab.currency || "").trim();
+      if (
+        !(
+          Number.isFinite(minMinutes) &&
+          minMinutes >= 0 &&
+          Number.isFinite(maxMinutes) &&
+          maxMinutes > minMinutes &&
+          Number.isFinite(price) &&
+          price >= 0 &&
+          currency
+        )
+      ) {
+        continue;
+      }
+      slabs.push({
+        id: slab.id || makeId("slab"),
+        min_minutes: minMinutes,
+        max_minutes: maxMinutes,
+        price,
+        currency,
+      });
+    }
+
+    const selectedPackages =
+      packages.length > 0
+        ? packages.filter((pkg) => selectedPackageIds.includes(pkg.id))
+        : [];
+
+    if (selectedPackages.length || per_minute || slabs.length) {
       meta.pricing = {
-        ...(packages.length ? { packages } : {}),
-        ...(per_minute ? { per_minute } : {}),
+        ...(pricingMode === "slabs" && slabs.length ? { slabs } : {}),
+        ...(selectedPackages.length ? { packages: selectedPackages } : {}),
+        ...(pricingMode === "per-minute" && per_minute ? { per_minute } : {}),
       };
     }
     return Object.keys(meta).length ? meta : undefined;
@@ -703,6 +797,25 @@ export default function FacilitiesPage() {
     }
   }
 
+  async function handleDuplicate(facility: Facility) {
+    if (!selectedLocationId) return;
+    setDuplicatingId(facility.id);
+    setError(null);
+    try {
+      await createFacilityAtLocationApi(selectedLocationId, {
+        name: `${facility.name} Copy`,
+        type: facility.type,
+        status: facility.status,
+        metadata: (facility.metadata || undefined) as Record<string, any> | undefined,
+      });
+      await loadFacilities(selectedLocationId);
+    } catch (err: any) {
+      setError(err.message || "Failed to duplicate facility");
+    } finally {
+      setDuplicatingId(null);
+    }
+  }
+
   const selectedLocation = useMemo(
     () => locations.find((loc) => loc.id === selectedLocationId) || null,
     [locations, selectedLocationId],
@@ -762,13 +875,21 @@ export default function FacilitiesPage() {
                 ))}
             </select>
           </div>
-          <Button
-            onClick={openCreateForm}
-            disabled={!selectedLocationId || loadingLocations}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Facility
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {FACILITY_TYPES.filter((opt) =>
+              allowedFacilityTypesForLocation.includes(opt.value)
+            ).map((opt) => (
+              <Button
+                key={opt.value}
+                variant="secondary"
+                onClick={() => openCreateForm(opt.value)}
+                disabled={!selectedLocationId || loadingLocations}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {`Add ${opt.label}`}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -854,6 +975,18 @@ export default function FacilitiesPage() {
                         Configure
                       </Button>
                       <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleDuplicate(facility)}
+                        disabled={duplicatingId === facility.id}
+                      >
+                        {duplicatingId === facility.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
                         variant="destructive"
                         size="sm"
                         onClick={() => handleDelete(facility.id)}
@@ -922,22 +1055,29 @@ export default function FacilitiesPage() {
                       <label className="text-xs font-medium text-text-secondary">
                         Facility type
                       </label>
-                      <select
-                        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                        value={formState.type}
-                        onChange={(e) => {
-                          const newType = e.target.value as FacilityTypeValue;
-                          setFormState((prev) => ({ ...prev, type: newType }));
-                        }}
-                      >
-                        {FACILITY_TYPES.filter((opt) =>
-                          allowedFacilityTypesForLocation.includes(opt.value)
-                        ).map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
+                      {editingFacility ? (
+                        <select
+                          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                          value={formState.type}
+                          onChange={(e) => {
+                            const newType = e.target.value as FacilityTypeValue;
+                            setFormState((prev) => ({ ...prev, type: newType }));
+                          }}
+                        >
+                          {FACILITY_TYPES.filter((opt) =>
+                            allowedFacilityTypesForLocation.includes(opt.value)
+                          ).map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary">
+                          {FACILITY_TYPES.find((opt) => opt.value === formState.type)?.label ||
+                            formState.type}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-text-secondary">
@@ -970,48 +1110,9 @@ export default function FacilitiesPage() {
 
                   {isPcFacilityType(formState.type) ? (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-medium text-text-secondary">PC units</div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            setFormState((prev) => ({
-                              ...prev,
-                              pcs: [
-                                ...prev.pcs,
-                                {
-                                  label: `PC ${prev.pcs.length + 1}`,
-                                  cpu: "",
-                                  gpu: "",
-                                  ram: "",
-                                  refreshRate: "",
-                                },
-                              ],
-                            }))
-                          }
-                        >
-                          <Plus className="mr-1 h-4 w-4" />
-                          Add PC
-                        </Button>
-                      </div>
-                      {formState.pcs.map((pc, idx) => (
+                      <div className="text-xs font-medium text-text-secondary">PC specs</div>
+                      {formState.pcs.slice(0, 1).map((pc, idx) => (
                         <div key={`${pc.label}_${idx}`} className="rounded-md border border-border p-3">
-                          <div className="mb-2 flex justify-end">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={formState.pcs.length <= 1}
-                              onClick={() =>
-                                setFormState((prev) => ({
-                                  ...prev,
-                                  pcs: prev.pcs.filter((_, i) => i !== idx),
-                                }))
-                              }
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
                           <div className="grid gap-3 md:grid-cols-2">
                             <Input
                               label="PC label"
@@ -1083,31 +1184,10 @@ export default function FacilitiesPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-medium text-text-secondary">
-                          Console stations
-                        </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            setFormState((prev) => ({
-                              ...prev,
-                              stations: [
-                                ...prev.stations,
-                                {
-                                  label: `Station ${prev.stations.length + 1}`,
-                                  screenSizeInches: "",
-                                },
-                              ],
-                            }))
-                          }
-                        >
-                          <Plus className="mr-1 h-4 w-4" />
-                          Add Station
-                        </Button>
+                      <div className="text-xs font-medium text-text-secondary">
+                        Console station details
                       </div>
-                      {formState.stations.map((station, idx) => (
+                      {formState.stations.slice(0, 1).map((station, idx) => (
                         <div
                           key={`${station.label}_${idx}`}
                           className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-2"
@@ -1140,21 +1220,6 @@ export default function FacilitiesPage() {
                               }))
                             }
                           />
-                          <div className="md:col-span-2 flex justify-end">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={formState.stations.length <= 1}
-                              onClick={() =>
-                                setFormState((prev) => ({
-                                  ...prev,
-                                  stations: prev.stations.filter((_, i) => i !== idx),
-                                }))
-                              }
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
                         </div>
                       ))}
                     </div>
@@ -1172,80 +1237,214 @@ export default function FacilitiesPage() {
                     }
                   />
 
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <Input
-                      label="Per-minute rate"
-                      type="number"
-                      step="any"
-                      value={formState.pricingPerMinute.ratePerMinute}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-text-secondary">
+                      Pricing mode
+                    </label>
+                    <select
+                      className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                      value={formState.pricingMode}
                       onChange={(e) =>
                         setFormState((prev) => ({
                           ...prev,
-                          pricingPerMinute: {
-                            ...prev.pricingPerMinute,
-                            ratePerMinute: e.target.value,
-                          },
+                          pricingMode: e.target.value as GamingPricingMode,
                         }))
                       }
-                    />
-                    <Input
-                      label="Currency"
-                      value={formState.pricingPerMinute.currency}
-                      onChange={(e) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          pricingPerMinute: {
-                            ...prev.pricingPerMinute,
-                            currency: e.target.value.toUpperCase(),
-                          },
-                        }))
-                      }
-                    />
-                    <Input
-                      label="Billing interval (min)"
-                      type="number"
-                      step="1"
-                      value={formState.pricingPerMinute.billingIntervalMinutes}
-                      onChange={(e) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          pricingPerMinute: {
-                            ...prev.pricingPerMinute,
-                            billingIntervalMinutes: e.target.value,
-                          },
-                        }))
-                      }
-                    />
-                    <Input
-                      label="Minimum minutes"
-                      type="number"
-                      step="1"
-                      value={formState.pricingPerMinute.minimumMinutes}
-                      onChange={(e) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          pricingPerMinute: {
-                            ...prev.pricingPerMinute,
-                            minimumMinutes: e.target.value,
-                          },
-                        }))
-                      }
-                    />
+                    >
+                      <option value="per-minute">Per-minute + packages</option>
+                      <option value="slabs">Pricing slabs</option>
+                    </select>
                   </div>
 
-                  <div className="space-y-2">
+                  {formState.pricingMode === "per-minute" ? (
+                    <>
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <Input
+                          label="Per-minute rate"
+                          type="number"
+                          step="any"
+                          value={formState.pricingPerMinute.ratePerMinute}
+                          onChange={(e) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingPerMinute: {
+                                ...prev.pricingPerMinute,
+                                ratePerMinute: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Currency"
+                          value={formState.pricingPerMinute.currency}
+                          onChange={(e) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingPerMinute: {
+                                ...prev.pricingPerMinute,
+                                currency: e.target.value.toUpperCase(),
+                              },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Billing interval (min)"
+                          type="number"
+                          step="1"
+                          value={formState.pricingPerMinute.billingIntervalMinutes}
+                          onChange={(e) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingPerMinute: {
+                                ...prev.pricingPerMinute,
+                                billingIntervalMinutes: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Minimum minutes"
+                          type="number"
+                          step="1"
+                          value={formState.pricingPerMinute.minimumMinutes}
+                          onChange={(e) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingPerMinute: {
+                                ...prev.pricingPerMinute,
+                                minimumMinutes: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-medium text-text-secondary">
+                          Pricing slabs
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingSlabs: [
+                                ...prev.pricingSlabs,
+                                {
+                                  id: makeId("slab"),
+                                  minMinutes: "",
+                                  maxMinutes: "",
+                                  price: "",
+                                  currency: prev.pricingPerMinute.currency || "PKR",
+                                },
+                              ],
+                            }))
+                          }
+                        >
+                          <Plus className="mr-1 h-4 w-4" />
+                          Add Slab
+                        </Button>
+                      </div>
+                      {formState.pricingSlabs.map((slab, idx) => (
+                        <div
+                          key={slab.id}
+                          className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-5"
+                        >
+                          <Input
+                            label="Min minutes"
+                            type="number"
+                            step="1"
+                            value={slab.minMinutes}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                pricingSlabs: prev.pricingSlabs.map((entry, i) =>
+                                  i === idx ? { ...entry, minMinutes: e.target.value } : entry
+                                ),
+                              }))
+                            }
+                          />
+                          <Input
+                            label="Max minutes"
+                            type="number"
+                            step="1"
+                            value={slab.maxMinutes}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                pricingSlabs: prev.pricingSlabs.map((entry, i) =>
+                                  i === idx ? { ...entry, maxMinutes: e.target.value } : entry
+                                ),
+                              }))
+                            }
+                          />
+                          <Input
+                            label="Price"
+                            type="number"
+                            step="any"
+                            value={slab.price}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                pricingSlabs: prev.pricingSlabs.map((entry, i) =>
+                                  i === idx ? { ...entry, price: e.target.value } : entry
+                                ),
+                              }))
+                            }
+                          />
+                          <Input
+                            label="Currency"
+                            value={slab.currency}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                pricingSlabs: prev.pricingSlabs.map((entry, i) =>
+                                  i === idx
+                                    ? { ...entry, currency: e.target.value.toUpperCase() }
+                                    : entry
+                                ),
+                              }))
+                            }
+                          />
+                          <div className="flex items-end justify-end">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingSlabs: prev.pricingSlabs.filter((_, i) => i !== idx),
+                                }))
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-2 rounded-md border border-border p-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-xs font-medium text-text-secondary">Packages</div>
+                      <div className="text-sm font-medium text-text-primary">
+                        Facility packages (multi-select)
+                      </div>
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() =>
+                        onClick={() => {
+                          const newId = makeId("pkg");
                           setFormState((prev) => ({
                             ...prev,
                             pricingPackages: [
                               ...prev.pricingPackages,
                               {
-                                id: makeId("pkg"),
+                                id: newId,
                                 title: "",
                                 minutes: "",
                                 price: "",
@@ -1253,19 +1452,43 @@ export default function FacilitiesPage() {
                                 validityHours: "",
                               },
                             ],
-                          }))
-                        }
+                            selectedPackageIds: [...prev.selectedPackageIds, newId],
+                          }));
+                        }}
                       >
                         <Plus className="mr-1 h-4 w-4" />
                         Add Package
                       </Button>
                     </div>
+
+                    {formState.pricingPackages.length === 0 && (
+                      <p className="text-xs text-text-secondary">
+                        No packages yet. Add package options and select the ones to activate for this facility.
+                      </p>
+                    )}
+
                     {formState.pricingPackages.map((pkg, idx) => (
                       <div
                         key={pkg.id}
                         className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-6"
                       >
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="inline-flex items-center gap-2 text-xs font-medium text-text-secondary">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border"
+                              checked={formState.selectedPackageIds.includes(pkg.id)}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  selectedPackageIds: e.target.checked
+                                    ? [...prev.selectedPackageIds, pkg.id]
+                                    : prev.selectedPackageIds.filter((id) => id !== pkg.id),
+                                }))
+                              }
+                            />
+                            Select for this facility
+                          </label>
                           <Input
                             label="Title"
                             value={pkg.title}
@@ -1342,15 +1565,17 @@ export default function FacilitiesPage() {
                             <Button
                               variant="secondary"
                               size="sm"
-                              onClick={() =>
+                              onClick={() => {
+                                const cloneId = makeId("pkg-copy");
                                 setFormState((prev) => ({
                                   ...prev,
                                   pricingPackages: [
                                     ...prev.pricingPackages,
-                                    { ...pkg, id: makeId("pkg-copy") },
+                                    { ...pkg, id: cloneId },
                                   ],
-                                }))
-                              }
+                                  selectedPackageIds: [...prev.selectedPackageIds, cloneId],
+                                }));
+                              }}
                             >
                               <Copy className="h-4 w-4" />
                             </Button>
@@ -1360,8 +1585,9 @@ export default function FacilitiesPage() {
                               onClick={() =>
                                 setFormState((prev) => ({
                                   ...prev,
-                                  pricingPackages: prev.pricingPackages.filter(
-                                    (_, i) => i !== idx
+                                  pricingPackages: prev.pricingPackages.filter((_, i) => i !== idx),
+                                  selectedPackageIds: prev.selectedPackageIds.filter(
+                                    (id) => id !== pkg.id
                                   ),
                                 }))
                               }
