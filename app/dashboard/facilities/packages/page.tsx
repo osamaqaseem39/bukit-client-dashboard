@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import FacilitySetupFormPage from "../_components/FacilitySetupFormPage";
 
 export default function FacilitiesPackagesRoutePage() {
-  redirect("/dashboard/facilities?form=packages");
+  return <FacilitySetupFormPage mode="packages" />;
 }
