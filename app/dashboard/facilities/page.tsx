@@ -207,6 +207,7 @@ export default function FacilitiesPage() {
 
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [gamesSearch, setGamesSearch] = useState("");
   const [formState, setFormState] = useState<FacilityFormState>({
     name: "",
     type: "futsal-field",
@@ -280,6 +281,7 @@ export default function FacilitiesPage() {
 
   function openCreateForm(type?: FacilityTypeValue) {
     setEditingFacility(null);
+    setGamesSearch("");
     const defaultType = (type ||
       allowedFacilityTypesForLocation[0] ||
       "futsal-field") as FacilityTypeValue;
@@ -329,6 +331,7 @@ export default function FacilitiesPage() {
 
   function openDetailsForm(facility: Facility) {
     setEditingFacility(facility);
+    setGamesSearch("");
     const meta = (facility.metadata || {}) as Record<string, any>;
     const pcsRaw = Array.isArray(meta.pcs) ? meta.pcs : [];
     const pcs: PcEntry[] =
@@ -467,6 +470,7 @@ export default function FacilitiesPage() {
   }
 
   function closeForm() {
+    setGamesSearch("");
     setShowForm(false);
     setEditingFacility(null);
   }
@@ -1180,28 +1184,44 @@ export default function FacilitiesPage() {
                     <p className="text-xs text-text-secondary">
                       Multi-select games for this facility.
                     </p>
-                    <select
-                      multiple
-                      className="min-h-[140px] w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                      value={formState.selectedGames}
-                      onChange={(e) => {
-                        const values = Array.from(e.target.selectedOptions).map(
-                          (opt) => opt.value
-                        );
-                        setFormState((prev) => ({ ...prev, selectedGames: values }));
-                      }}
-                    >
+                    <Input
+                      label="Search games"
+                      placeholder="Type to search..."
+                      value={gamesSearch}
+                      onChange={(e) => setGamesSearch(e.target.value)}
+                    />
+                    <div className="max-h-52 space-y-2 overflow-auto rounded-md border border-border p-2">
                       {Array.from(
                         new Set([
                           ...(DEFAULT_GAMES_BY_TYPE[formState.type] || []),
                           ...formState.selectedGames,
                         ])
-                      ).map((game) => (
-                        <option key={game} value={game}>
-                          {game}
-                        </option>
-                      ))}
-                    </select>
+                      )
+                        .filter((game) =>
+                          game.toLowerCase().includes(gamesSearch.trim().toLowerCase())
+                        )
+                        .map((game) => (
+                          <label
+                            key={game}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-text-primary hover:bg-surface/70"
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-border"
+                              checked={formState.selectedGames.includes(game)}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  selectedGames: e.target.checked
+                                    ? [...prev.selectedGames, game]
+                                    : prev.selectedGames.filter((g) => g !== game),
+                                }))
+                              }
+                            />
+                            <span>{game}</span>
+                          </label>
+                        ))}
+                    </div>
                   </div>
 
                   <div className="space-y-1">
