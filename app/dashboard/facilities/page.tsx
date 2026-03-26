@@ -180,7 +180,6 @@ interface FacilityFormState {
   arenaPricing: ArenaPricingState;
   courtSizeMode: CourtSizeMode;
 }
-type FacilityFormMode = "basic" | "details";
 
 function makeId(prefix: string) {
   // Avoid relying on crypto.randomUUID in older browsers.
@@ -202,7 +201,6 @@ export default function FacilitiesPage() {
 
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [formMode, setFormMode] = useState<FacilityFormMode>("basic");
   const [formState, setFormState] = useState<FacilityFormState>({
     name: "",
     type: "futsal-field",
@@ -275,7 +273,6 @@ export default function FacilitiesPage() {
   }
 
   function openCreateForm(type?: FacilityTypeValue) {
-    setFormMode("basic");
     setEditingFacility(null);
     const defaultType = (type ||
       allowedFacilityTypesForLocation[0] ||
@@ -324,22 +321,7 @@ export default function FacilitiesPage() {
     setShowForm(true);
   }
 
-  function openBasicEditForm(facility: Facility) {
-    setFormMode("basic");
-    setEditingFacility(facility);
-    setFormState((prev) => ({
-      ...prev,
-      name: facility.name,
-      type: FACILITY_TYPES.some((entry) => entry.value === facility.type)
-        ? (facility.type as FacilityTypeValue)
-        : "futsal-field",
-      status: facility.status,
-    }));
-    setShowForm(true);
-  }
-
   function openDetailsForm(facility: Facility) {
-    setFormMode("details");
     setEditingFacility(facility);
     const meta = (facility.metadata || {}) as Record<string, any>;
     const pcsRaw = Array.isArray(meta.pcs) ? meta.pcs : [];
@@ -469,7 +451,6 @@ export default function FacilitiesPage() {
   }
 
   function closeForm() {
-    setFormMode("basic");
     setShowForm(false);
     setEditingFacility(null);
   }
@@ -722,13 +703,8 @@ export default function FacilitiesPage() {
       return;
     }
 
-    if (formMode === "basic" && !formState.name.trim()) {
+    if (!formState.name.trim()) {
       setError("Facility name is required");
-      return;
-    }
-
-    if (formMode === "details" && !editingFacility) {
-      setError("Select a facility first");
       return;
     }
 
@@ -736,30 +712,20 @@ export default function FacilitiesPage() {
     setError(null);
 
     try {
-      if (formMode === "basic") {
-        const payload: CreateFacilityPayload = {
-          name: formState.name.trim(),
-          type: formState.type,
-          status: formState.status,
-        };
-
-        if (editingFacility) {
-          await updateFacilityAtLocationApi(
-            selectedLocationId,
-            editingFacility.id,
-            payload,
-          );
-        } else {
-          await createFacilityAtLocationApi(selectedLocationId, payload);
-        }
-      } else {
+      const payload: CreateFacilityPayload = {
+        name: formState.name.trim(),
+        type: formState.type,
+        status: formState.status,
+        metadata: buildMetadata(),
+      };
+      if (editingFacility) {
         await updateFacilityAtLocationApi(
           selectedLocationId,
-          editingFacility!.id,
-          {
-            metadata: buildMetadata(),
-          },
+          editingFacility.id,
+          payload,
         );
+      } else {
+        await createFacilityAtLocationApi(selectedLocationId, payload);
       }
 
       await loadFacilities(selectedLocationId);
@@ -767,13 +733,7 @@ export default function FacilitiesPage() {
     } catch (err: any) {
       setError(
         err.message ||
-          `Failed to ${
-            formMode === "details"
-              ? "save facility details"
-              : editingFacility
-                ? "update"
-                : "create"
-          }`,
+          `Failed to ${editingFacility ? "update" : "create"} facility`,
       );
     } finally {
       setSaving(false);
@@ -963,7 +923,7 @@ export default function FacilitiesPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => openBasicEditForm(facility)}
+                        onClick={() => openDetailsForm(facility)}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -1024,85 +984,56 @@ export default function FacilitiesPage() {
         <Card className="mx-auto w-full max-w-4xl">
           <CardHeader>
             <h2 className="text-lg font-medium text-text-primary">
-              {formMode === "basic"
-                ? editingFacility
-                  ? "Edit Facility"
-                  : "Add Facility"
-                : `Configure ${editingFacility?.name || "Facility"} Details`}
+              {editingFacility
+                ? `Configure ${editingFacility.name}`
+                : `Add ${FACILITY_TYPES.find((opt) => opt.value === formState.type)?.label || "Facility"}`}
             </h2>
             <p className="mt-1 text-sm text-text-secondary">
-              {formMode === "basic"
-                ? editingFacility
-                  ? "Update basic facility information."
-                  : "Create the facility first. Then configure details separately."
-                : "Fill the dedicated details form for this facility type and save."}
+              Fill the configuration details for this facility type.
             </p>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {formMode === "basic" && (
-                <>
-                  <Input
-                    label="Facility Name *"
-                    value={formState.name}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    placeholder="e.g. Futsal Court A"
-                  />
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-text-secondary">
-                        Facility type
-                      </label>
-                      {editingFacility ? (
-                        <select
-                          className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                          value={formState.type}
-                          onChange={(e) => {
-                            const newType = e.target.value as FacilityTypeValue;
-                            setFormState((prev) => ({ ...prev, type: newType }));
-                          }}
-                        >
-                          {FACILITY_TYPES.filter((opt) =>
-                            allowedFacilityTypesForLocation.includes(opt.value)
-                          ).map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary">
-                          {FACILITY_TYPES.find((opt) => opt.value === formState.type)?.label ||
-                            formState.type}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-text-secondary">
-                        Status
-                      </label>
-                      <select
-                        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                        value={formState.status}
-                        onChange={(e) =>
-                          setFormState((prev) => ({
-                            ...prev,
-                            status: e.target.value as FacilityStatus,
-                          }))
-                        }
-                      >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="maintenance">Maintenance</option>
-                      </select>
-                    </div>
+              <Input
+                label="Facility Name *"
+                value={formState.name}
+                onChange={(e) =>
+                  setFormState((prev) => ({ ...prev, name: e.target.value }))
+                }
+                placeholder="e.g. Futsal Court A"
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">
+                    Facility type
+                  </label>
+                  <div className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary">
+                    {FACILITY_TYPES.find((opt) => opt.value === formState.type)?.label ||
+                      formState.type}
                   </div>
-                </>
-              )}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">
+                    Status
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                    value={formState.status}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        status: e.target.value as FacilityStatus,
+                      }))
+                    }
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="maintenance">Maintenance</option>
+                  </select>
+                </div>
+              </div>
 
-              {formMode === "details" && isGamingFacilityType(formState.type) && (
+              {isGamingFacilityType(formState.type) && (
                 <div className="space-y-4 rounded-lg border border-border bg-surface/50 p-4">
                   <div className="text-sm font-medium text-text-primary">
                     Gaming zone setup details
@@ -1602,7 +1533,7 @@ export default function FacilitiesPage() {
                 </div>
               )}
 
-              {formMode === "details" && isArenaFacilityType(formState.type) && (
+              {isArenaFacilityType(formState.type) && (
                 <div className="space-y-4 rounded-lg border border-border bg-surface/50 p-4">
                   <div className="text-sm font-medium text-text-primary">
                     Arena booking details
@@ -1754,11 +1685,7 @@ export default function FacilitiesPage() {
                       Saving...
                     </>
                   ) : (
-                    formMode === "basic"
-                      ? editingFacility
-                        ? "Save Basic Info"
-                        : "Create Facility"
-                      : "Save Details"
+                    editingFacility ? "Save Changes" : "Create Facility"
                   )}
                 </Button>
               </div>
