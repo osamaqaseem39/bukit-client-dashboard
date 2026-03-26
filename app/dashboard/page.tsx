@@ -160,6 +160,8 @@ export default function DashboardPage() {
   const [facilitiesLoading, setFacilitiesLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
 
   const [quickBookingFacility, setQuickBookingFacility] =
     useState<Facility | null>(null);
@@ -306,14 +308,91 @@ export default function DashboardPage() {
   const showBookings = modules.has("bookings");
   const showLocations = modules.has("locations");
 
-  const totalBookings = bookings.length;
+  const filteredBookings = useMemo(() => {
+    const fromTs = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : null;
+    const toTs = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : null;
+
+    return bookings.filter((b) => {
+      const startTs = new Date(b.start_time).getTime();
+      if (!Number.isFinite(startTs)) return false;
+      if (fromTs != null && startTs < fromTs) return false;
+      if (toTs != null && startTs > toTs) return false;
+      return true;
+    });
+  }, [bookings, fromDate, toDate]);
+
+  const totalBookings = filteredBookings.length;
   const locationsCount = locations.length;
+  const totalSalesAllTime = useMemo(() => {
+    return bookings.reduce((sum, booking) => {
+      if (booking.status === "cancelled") return sum;
+      const amount =
+        booking.amount != null && Number.isFinite(Number(booking.amount))
+          ? Number(booking.amount)
+          : 0;
+      return sum + amount;
+    }, 0);
+  }, [bookings]);
+  const totalSalesToday = useMemo(() => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    ).getTime();
+
+    return bookings.reduce((sum, booking) => {
+      if (booking.status === "cancelled") return sum;
+      const startTs = new Date(booking.start_time).getTime();
+      if (!Number.isFinite(startTs) || startTs < startOfDay || startTs > endOfDay) return sum;
+      const amount =
+        booking.amount != null && Number.isFinite(Number(booking.amount))
+          ? Number(booking.amount)
+          : 0;
+      return sum + amount;
+    }, 0);
+  }, [bookings]);
+  const totalSalesThisMonth = useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    ).getTime();
+
+    return bookings.reduce((sum, booking) => {
+      if (booking.status === "cancelled") return sum;
+      const startTs = new Date(booking.start_time).getTime();
+      if (
+        !Number.isFinite(startTs) ||
+        startTs < startOfMonth ||
+        startTs > endOfMonth
+      ) {
+        return sum;
+      }
+      const amount =
+        booking.amount != null && Number.isFinite(Number(booking.amount))
+          ? Number(booking.amount)
+          : 0;
+      return sum + amount;
+    }, 0);
+  }, [bookings]);
 
   const bookingsForSelectedLocation = useMemo(() => {
     if (user?.role !== "client") return [];
     if (!selectedLocationId) return [];
-    return bookings.filter((b) => b.location_id === selectedLocationId);
-  }, [bookings, selectedLocationId, user?.role]);
+    return filteredBookings.filter((b) => b.location_id === selectedLocationId);
+  }, [filteredBookings, selectedLocationId, user?.role]);
 
   function findCurrentBookingForFacility(facilityId: string) {
     const now = new Date();
@@ -329,7 +408,7 @@ export default function DashboardPage() {
     });
   }
 
-  const recentBookings = [...bookings]
+  const recentBookings = [...filteredBookings]
     .sort(
       (a, b) =>
         new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
@@ -343,7 +422,7 @@ export default function DashboardPage() {
       { month: string; bookings: number }
     > = {};
 
-    bookings.forEach((b) => {
+    filteredBookings.forEach((b) => {
       const d = new Date(b.start_time);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
         2,
@@ -358,7 +437,7 @@ export default function DashboardPage() {
     return Object.values(byMonth).sort((a, b) =>
       a.month.localeCompare(b.month),
     );
-  }, [bookings]);
+  }, [filteredBookings]);
 
   const facilityGroups = useMemo(() => {
     const groups: Record<string, Facility[]> = {};
@@ -534,6 +613,37 @@ export default function DashboardPage() {
       )}
 
       {/* Stats Grid */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Input
+              label="From date"
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+            />
+            <Input
+              label="To date"
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+            />
+            <div className="flex items-end">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setFromDate("");
+                  setToDate("");
+                }}
+                className="w-full md:w-auto"
+              >
+                Clear dates
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {showOverview && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
@@ -563,11 +673,32 @@ export default function DashboardPage() {
               iconColor="text-primary"
             />
           )}
+          <StatCard
+            title="Total Sales (All)"
+            value={formatCurrency(totalSalesAllTime)}
+            change={undefined}
+            icon={DollarSign}
+            iconColor="text-success"
+          />
+          <StatCard
+            title="Sales Today"
+            value={formatCurrency(totalSalesToday)}
+            change={undefined}
+            icon={TrendingUp}
+            iconColor="text-primary"
+          />
+          <StatCard
+            title="Sales This Month"
+            value={formatCurrency(totalSalesThisMonth)}
+            change={undefined}
+            icon={DollarSign}
+            iconColor="text-warning"
+          />
           {showBookings && (
             <StatCard
               title="Pending Bookings"
               value={formatNumber(
-                bookings.filter((b) => b.status === "pending").length,
+                filteredBookings.filter((b) => b.status === "pending").length,
               )}
               change={undefined}
               icon={Activity}
