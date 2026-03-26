@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Loader2, MapPin, Pencil, Plus, Trash2, X, Copy } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -88,6 +90,7 @@ interface PerMinutePricingState {
   minimumMinutes: string;
 }
 type GamingPricingMode = "per-minute" | "slabs";
+type FacilityFormRoute = "games" | "prices" | "packages";
 
 interface PricingSlabEntry {
   id: string;
@@ -194,6 +197,7 @@ function makeId(prefix: string) {
 
 export default function FacilitiesPage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>("");
@@ -208,6 +212,12 @@ export default function FacilitiesPage() {
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [gamesSearch, setGamesSearch] = useState("");
+  const [gamesDropdownOpen, setGamesDropdownOpen] = useState(false);
+  const requestedForm = useMemo<FacilityFormRoute | null>(() => {
+    const form = searchParams.get("form");
+    if (form === "games" || form === "prices" || form === "packages") return form;
+    return null;
+  }, [searchParams]);
   const [formState, setFormState] = useState<FacilityFormState>({
     name: "",
     type: "futsal-field",
@@ -282,6 +292,7 @@ export default function FacilitiesPage() {
   function openCreateForm(type?: FacilityTypeValue) {
     setEditingFacility(null);
     setGamesSearch("");
+    setGamesDropdownOpen(false);
     const defaultType = (type ||
       allowedFacilityTypesForLocation[0] ||
       "futsal-field") as FacilityTypeValue;
@@ -332,6 +343,7 @@ export default function FacilitiesPage() {
   function openDetailsForm(facility: Facility) {
     setEditingFacility(facility);
     setGamesSearch("");
+    setGamesDropdownOpen(false);
     const meta = (facility.metadata || {}) as Record<string, any>;
     const pcsRaw = Array.isArray(meta.pcs) ? meta.pcs : [];
     const pcs: PcEntry[] =
@@ -471,6 +483,7 @@ export default function FacilitiesPage() {
 
   function closeForm() {
     setGamesSearch("");
+    setGamesDropdownOpen(false);
     setShowForm(false);
     setEditingFacility(null);
   }
@@ -823,6 +836,31 @@ export default function FacilitiesPage() {
     return filtered.length ? filtered : FACILITY_TYPES.map((f) => f.value);
   }, [selectedLocation]);
 
+  useEffect(() => {
+    if (!requestedForm) return;
+    if (showForm) return;
+    openCreateForm("gaming-pc");
+  }, [requestedForm, showForm, selectedLocationId]);
+
+  useEffect(() => {
+    if (!requestedForm || !showForm) return;
+    if (!isGamingFacilityType(formState.type)) {
+      setFormState((prev) => ({ ...prev, type: "gaming-pc" }));
+    }
+  }, [requestedForm, showForm, formState.type]);
+
+  useEffect(() => {
+    if (!requestedForm || !showForm) return;
+    const id = `facility-form-${requestedForm}`;
+    const timeout = window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 50);
+    return () => window.clearTimeout(timeout);
+  }, [requestedForm, showForm]);
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -834,6 +872,17 @@ export default function FacilitiesPage() {
           <p className="mt-1 text-sm text-text-secondary">
             Manage the facilities available at your locations.
           </p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <Link className="text-primary underline" href="/dashboard/facilities/games">
+              Games form
+            </Link>
+            <Link className="text-primary underline" href="/dashboard/facilities/prices">
+              Prices form
+            </Link>
+            <Link className="text-primary underline" href="/dashboard/facilities/packages">
+              Packages form
+            </Link>
+          </div>
         </div>
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="flex items-center gap-2">
@@ -1179,52 +1228,71 @@ export default function FacilitiesPage() {
                     </div>
                   )}
 
-                  <div className="space-y-2 rounded-md border border-border p-3">
+                  <div
+                    id="facility-form-games"
+                    className="space-y-2 rounded-md border border-border p-3"
+                  >
                     <div className="text-sm font-medium text-text-primary">Games</div>
                     <p className="text-xs text-text-secondary">
                       Multi-select games for this facility.
                     </p>
-                    <Input
-                      label="Search games"
-                      placeholder="Type to search..."
-                      value={gamesSearch}
-                      onChange={(e) => setGamesSearch(e.target.value)}
-                    />
-                    <div className="max-h-52 space-y-2 overflow-auto rounded-md border border-border p-2">
-                      {Array.from(
-                        new Set([
-                          ...(DEFAULT_GAMES_BY_TYPE[formState.type] || []),
-                          ...formState.selectedGames,
-                        ])
-                      )
-                        .filter((game) =>
-                          game.toLowerCase().includes(gamesSearch.trim().toLowerCase())
-                        )
-                        .map((game) => (
-                          <label
-                            key={game}
-                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-text-primary hover:bg-surface/70"
-                          >
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border"
-                              checked={formState.selectedGames.includes(game)}
-                              onChange={(e) =>
-                                setFormState((prev) => ({
-                                  ...prev,
-                                  selectedGames: e.target.checked
-                                    ? [...prev.selectedGames, game]
-                                    : prev.selectedGames.filter((g) => g !== game),
-                                }))
-                              }
-                            />
-                            <span>{game}</span>
-                          </label>
-                        ))}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-left text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                        onClick={() => setGamesDropdownOpen((prev) => !prev)}
+                      >
+                        {formState.selectedGames.length > 0
+                          ? `${formState.selectedGames.length} game(s) selected`
+                          : "Select games"}
+                      </button>
+
+                      {gamesDropdownOpen && (
+                        <div className="absolute z-10 mt-2 w-full rounded-md border border-border bg-surface p-2 shadow-lg">
+                          <input
+                            className="mb-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary outline-none focus:ring-2 focus:ring-primary/60"
+                            placeholder="Search games..."
+                            value={gamesSearch}
+                            onChange={(e) => setGamesSearch(e.target.value)}
+                          />
+                          <div className="max-h-48 space-y-1 overflow-auto">
+                            {Array.from(
+                              new Set([
+                                ...(DEFAULT_GAMES_BY_TYPE[formState.type] || []),
+                                ...formState.selectedGames,
+                              ])
+                            )
+                              .filter((game) =>
+                                game.toLowerCase().includes(gamesSearch.trim().toLowerCase())
+                              )
+                              .map((game) => (
+                                <label
+                                  key={game}
+                                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-text-primary hover:bg-surface/70"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-border"
+                                    checked={formState.selectedGames.includes(game)}
+                                    onChange={(e) =>
+                                      setFormState((prev) => ({
+                                        ...prev,
+                                        selectedGames: e.target.checked
+                                          ? [...prev.selectedGames, game]
+                                          : prev.selectedGames.filter((g) => g !== game),
+                                      }))
+                                    }
+                                  />
+                                  <span>{game}</span>
+                                </label>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="space-y-1">
+                  <div id="facility-form-prices" className="space-y-1">
                     <label className="text-xs font-medium text-text-secondary">
                       Pricing mode
                     </label>
@@ -1416,7 +1484,10 @@ export default function FacilitiesPage() {
                     </div>
                   )}
 
-                  <div className="space-y-2 rounded-md border border-border p-3">
+                  <div
+                    id="facility-form-packages"
+                    className="space-y-2 rounded-md border border-border p-3"
+                  >
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-medium text-text-primary">
                         Facility packages (multi-select)
