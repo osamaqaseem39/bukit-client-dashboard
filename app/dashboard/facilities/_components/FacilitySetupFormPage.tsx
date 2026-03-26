@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   Facility,
   getFacilitiesByLocationApi,
@@ -53,11 +53,17 @@ export default function FacilitySetupFormPage({ mode }: { mode: SetupMode }) {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [gamesText, setGamesText] = useState("");
+  const [newGame, setNewGame] = useState("");
+  const [editingGameIndex, setEditingGameIndex] = useState<number | null>(null);
+  const [editingGameValue, setEditingGameValue] = useState("");
   const [ratePerMinute, setRatePerMinute] = useState("");
   const [currency, setCurrency] = useState("PKR");
   const [billingIntervalMinutes, setBillingIntervalMinutes] = useState("10");
   const [minimumMinutes, setMinimumMinutes] = useState("");
   const [packages, setPackages] = useState<PackageRow[]>([]);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+  const [packageDraft, setPackageDraft] = useState<PackageRow | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -161,7 +167,102 @@ export default function FacilitySetupFormPage({ mode }: { mode: SetupMode }) {
         }))
       : [];
     setPackages(packageRows);
+    setNewGame("");
+    setEditingGameIndex(null);
+    setEditingGameValue("");
+    setEditingPrice(false);
+    setEditingPackageId(null);
+    setPackageDraft(null);
   }, [selectedFacilityId, selectedFacility]);
+
+  const gameList = useMemo(
+    () =>
+      gamesText
+        .split(/\n|,/)
+        .map((g) => g.trim())
+        .filter(Boolean),
+    [gamesText],
+  );
+
+  function addGame() {
+    const next = newGame.trim();
+    if (!next) return;
+    if (gameList.some((g) => g.toLowerCase() === next.toLowerCase())) return;
+    setGamesText([...gameList, next].join("\n"));
+    setNewGame("");
+  }
+
+  function removeGame(index: number) {
+    setGamesText(gameList.filter((_, i) => i !== index).join("\n"));
+    if (editingGameIndex === index) {
+      setEditingGameIndex(null);
+      setEditingGameValue("");
+    }
+  }
+
+  function startEditGame(index: number) {
+    setEditingGameIndex(index);
+    setEditingGameValue(gameList[index] || "");
+  }
+
+  function saveEditGame() {
+    if (editingGameIndex == null) return;
+    const next = editingGameValue.trim();
+    if (!next) return;
+    const updated = [...gameList];
+    updated[editingGameIndex] = next;
+    setGamesText(updated.join("\n"));
+    setEditingGameIndex(null);
+    setEditingGameValue("");
+  }
+
+  function startCreatePackage() {
+    setEditingPackageId("__new__");
+    setPackageDraft({
+      id: makeId("pkg"),
+      title: "",
+      minutes: "",
+      price: "",
+      currency: "PKR",
+      validityHours: "",
+    });
+  }
+
+  function startEditPackage(pkg: PackageRow) {
+    setEditingPackageId(pkg.id);
+    setPackageDraft({ ...pkg });
+  }
+
+  function cancelPackageEdit() {
+    setEditingPackageId(null);
+    setPackageDraft(null);
+  }
+
+  function savePackageDraft() {
+    if (!packageDraft || !editingPackageId) return;
+    const validDraft = {
+      ...packageDraft,
+      title: packageDraft.title.trim(),
+      currency: (packageDraft.currency || "PKR").toUpperCase(),
+    };
+    if (
+      !validDraft.title ||
+      !Number.isFinite(Number(validDraft.minutes)) ||
+      Number(validDraft.minutes) <= 0 ||
+      !Number.isFinite(Number(validDraft.price)) ||
+      Number(validDraft.price) < 0
+    ) {
+      return;
+    }
+    if (editingPackageId === "__new__") {
+      setPackages((prev) => [...prev, validDraft]);
+    } else {
+      setPackages((prev) =>
+        prev.map((pkg) => (pkg.id === editingPackageId ? validDraft : pkg)),
+      );
+    }
+    cancelPackageEdit();
+  }
 
   async function handleSave() {
     if (!selectedLocationId || !selectedFacility) return;
@@ -302,82 +403,203 @@ export default function FacilitySetupFormPage({ mode }: { mode: SetupMode }) {
           ) : (
             <div className="space-y-4">
               {mode === "games" && (
-                <Input
-                  label="Games (one per line or comma-separated)"
-                  value={gamesText}
-                  onChange={(e) => setGamesText(e.target.value)}
-                  placeholder={"Valorant\nCS2\nDota 2"}
-                />
+                <div className="space-y-3">
+                  <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                    <Input
+                      label="Add game"
+                      value={newGame}
+                      onChange={(e) => setNewGame(e.target.value)}
+                      placeholder="e.g. Valorant"
+                    />
+                    <div className="flex items-end">
+                      <Button variant="secondary" onClick={addGame}>
+                        <Plus className="mr-1 h-4 w-4" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border border-border">
+                    {gameList.length === 0 ? (
+                      <p className="p-3 text-sm text-text-secondary">No games added yet.</p>
+                    ) : (
+                      <ul className="divide-y divide-border">
+                        {gameList.map((game, idx) => (
+                          <li
+                            key={`${game}_${idx}`}
+                            className="flex items-center justify-between gap-2 p-3"
+                          >
+                            {editingGameIndex === idx ? (
+                              <div className="flex w-full items-center gap-2">
+                                <Input
+                                  label=""
+                                  value={editingGameValue}
+                                  onChange={(e) => setEditingGameValue(e.target.value)}
+                                />
+                                <Button size="sm" onClick={saveEditGame}>
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => {
+                                    setEditingGameIndex(null);
+                                    setEditingGameValue("");
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="text-sm text-text-primary">{game}</span>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => startEditGame(idx)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => removeGame(idx)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
               )}
 
               {mode === "prices" && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Input
-                    label="Rate per minute"
-                    type="number"
-                    step="any"
-                    value={ratePerMinute}
-                    onChange={(e) => setRatePerMinute(e.target.value)}
-                  />
-                  <Input
-                    label="Currency"
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                  />
-                  <Input
-                    label="Billing interval (minutes)"
-                    type="number"
-                    step="1"
-                    value={billingIntervalMinutes}
-                    onChange={(e) => setBillingIntervalMinutes(e.target.value)}
-                  />
-                  <Input
-                    label="Minimum minutes (optional)"
-                    type="number"
-                    step="1"
-                    value={minimumMinutes}
-                    onChange={(e) => setMinimumMinutes(e.target.value)}
-                  />
+                <div className="space-y-3">
+                  <div className="rounded-md border border-border p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-text-primary">Current Price Setup</h3>
+                      {!editingPrice && (
+                        <Button size="sm" variant="secondary" onClick={() => setEditingPrice(true)}>
+                          <Pencil className="mr-1 h-4 w-4" />
+                          Edit
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid gap-2 text-sm text-text-secondary md:grid-cols-2">
+                      <div>Rate/min: {ratePerMinute || "-"}</div>
+                      <div>Currency: {currency || "-"}</div>
+                      <div>Billing interval: {billingIntervalMinutes || "-"} mins</div>
+                      <div>Minimum minutes: {minimumMinutes || "-"}</div>
+                    </div>
+                  </div>
+                  {editingPrice && (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Input
+                        label="Rate per minute"
+                        type="number"
+                        step="any"
+                        value={ratePerMinute}
+                        onChange={(e) => setRatePerMinute(e.target.value)}
+                      />
+                      <Input
+                        label="Currency"
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                      />
+                      <Input
+                        label="Billing interval (minutes)"
+                        type="number"
+                        step="1"
+                        value={billingIntervalMinutes}
+                        onChange={(e) => setBillingIntervalMinutes(e.target.value)}
+                      />
+                      <Input
+                        label="Minimum minutes (optional)"
+                        type="number"
+                        step="1"
+                        value={minimumMinutes}
+                        onChange={(e) => setMinimumMinutes(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {editingPrice && (
+                    <div className="flex justify-end">
+                      <Button variant="secondary" onClick={() => setEditingPrice(false)}>
+                        <X className="mr-1 h-4 w-4" />
+                        Done Editing
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
               {mode === "packages" && (
                 <div className="space-y-3">
                   <div className="flex justify-end">
-                    <Button
-                      variant="secondary"
-                      onClick={() =>
-                        setPackages((prev) => [
-                          ...prev,
-                          {
-                            id: makeId("pkg"),
-                            title: "",
-                            minutes: "",
-                            price: "",
-                            currency: "PKR",
-                            validityHours: "",
-                          },
-                        ])
-                      }
-                    >
+                    <Button variant="secondary" onClick={startCreatePackage}>
                       <Plus className="mr-1 h-4 w-4" />
                       Add Package
                     </Button>
                   </div>
-                  {packages.map((pkg, idx) => (
-                    <div
-                      key={pkg.id}
-                      className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-6"
-                    >
+
+                  <div className="rounded-md border border-border">
+                    {packages.length === 0 ? (
+                      <p className="p-3 text-sm text-text-secondary">No packages added yet.</p>
+                    ) : (
+                      <ul className="divide-y divide-border">
+                        {packages.map((pkg) => (
+                          <li
+                            key={pkg.id}
+                            className="flex items-center justify-between gap-2 p-3"
+                          >
+                            <div className="text-sm">
+                              <div className="font-medium text-text-primary">{pkg.title}</div>
+                              <div className="text-text-secondary">
+                                {pkg.minutes} mins - {pkg.price} {pkg.currency}
+                                {pkg.validityHours ? ` - ${pkg.validityHours}h validity` : ""}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => startEditPackage(pkg)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() =>
+                                  setPackages((prev) =>
+                                    prev.filter((entry) => entry.id !== pkg.id),
+                                  )
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {packageDraft && editingPackageId && (
+                    <div className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-6">
                       <div className="md:col-span-2">
                         <Input
                           label="Title"
-                          value={pkg.title}
+                          value={packageDraft.title}
                           onChange={(e) =>
-                            setPackages((prev) =>
-                              prev.map((row, i) =>
-                                i === idx ? { ...row, title: e.target.value } : row,
-                              ),
+                            setPackageDraft((prev) =>
+                              prev ? { ...prev, title: e.target.value } : prev,
                             )
                           }
                         />
@@ -386,12 +608,10 @@ export default function FacilitySetupFormPage({ mode }: { mode: SetupMode }) {
                         label="Minutes"
                         type="number"
                         step="1"
-                        value={pkg.minutes}
+                        value={packageDraft.minutes}
                         onChange={(e) =>
-                          setPackages((prev) =>
-                            prev.map((row, i) =>
-                              i === idx ? { ...row, minutes: e.target.value } : row,
-                            ),
+                          setPackageDraft((prev) =>
+                            prev ? { ...prev, minutes: e.target.value } : prev,
                           )
                         }
                       />
@@ -399,25 +619,21 @@ export default function FacilitySetupFormPage({ mode }: { mode: SetupMode }) {
                         label="Price"
                         type="number"
                         step="any"
-                        value={pkg.price}
+                        value={packageDraft.price}
                         onChange={(e) =>
-                          setPackages((prev) =>
-                            prev.map((row, i) =>
-                              i === idx ? { ...row, price: e.target.value } : row,
-                            ),
+                          setPackageDraft((prev) =>
+                            prev ? { ...prev, price: e.target.value } : prev,
                           )
                         }
                       />
                       <Input
                         label="Currency"
-                        value={pkg.currency}
+                        value={packageDraft.currency}
                         onChange={(e) =>
-                          setPackages((prev) =>
-                            prev.map((row, i) =>
-                              i === idx
-                                ? { ...row, currency: e.target.value.toUpperCase() }
-                                : row,
-                            ),
+                          setPackageDraft((prev) =>
+                            prev
+                              ? { ...prev, currency: e.target.value.toUpperCase() }
+                              : prev,
                           )
                         }
                       />
@@ -426,32 +642,23 @@ export default function FacilitySetupFormPage({ mode }: { mode: SetupMode }) {
                           label="Validity hours"
                           type="number"
                           step="1"
-                          value={pkg.validityHours}
+                          value={packageDraft.validityHours}
                           onChange={(e) =>
-                            setPackages((prev) =>
-                              prev.map((row, i) =>
-                                i === idx
-                                  ? { ...row, validityHours: e.target.value }
-                                  : row,
-                              ),
+                            setPackageDraft((prev) =>
+                              prev ? { ...prev, validityHours: e.target.value } : prev,
                             )
                           }
                         />
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() =>
-                            setPackages((prev) => prev.filter((_, i) => i !== idx))
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
+                      </div>
+                      <div className="md:col-span-6 flex justify-end gap-2">
+                        <Button variant="secondary" onClick={cancelPackageEdit}>
+                          Cancel
                         </Button>
+                        <Button onClick={savePackageDraft}>Save Package</Button>
                       </div>
                     </div>
-                  ))}
-                  {packages.length === 0 && (
-                    <p className="text-sm text-text-secondary">No packages added yet.</p>
                   )}
+
                 </div>
               )}
 

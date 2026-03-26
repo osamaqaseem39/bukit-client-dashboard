@@ -145,6 +145,24 @@ const navItems: NavItem[] = [
     // can be module-gated later when backend exposes a facilities module key.
   },
   {
+    label: "Games Setup",
+    href: "/dashboard/facilities/games",
+    icon: <Gamepad2 className="h-5 w-5" />,
+    roles: ["client", "location_manager"],
+  },
+  {
+    label: "Prices Setup",
+    href: "/dashboard/facilities/prices",
+    icon: <Activity className="h-5 w-5" />,
+    roles: ["client", "location_manager"],
+  },
+  {
+    label: "Packages Setup",
+    href: "/dashboard/facilities/packages",
+    icon: <CircleDot className="h-5 w-5" />,
+    roles: ["client", "location_manager"],
+  },
+  {
     label: "Users",
     href: "/dashboard/users",
     icon: <Users className="h-5 w-5" />,
@@ -198,7 +216,14 @@ export default function Sidebar() {
     return navItems;
   }, [user]);
 
-  const clientBottomLabels = ["Locations", "Facilities", "Settings"];
+  const clientBottomLabels = [
+    "Locations",
+    "Facilities",
+    "Games Setup",
+    "Prices Setup",
+    "Packages Setup",
+    "Settings",
+  ];
   const { topItems, bottomItems } = useMemo(() => {
     if (!user || user.role !== "client") {
       return { topItems: visibleNavItems, bottomItems: [] as NavItem[] };
