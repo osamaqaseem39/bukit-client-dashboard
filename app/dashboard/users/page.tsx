@@ -55,7 +55,7 @@ export default function UsersPage() {
   const [editForm, setEditForm] = useState<UpdateUserRolePayload>({
     role: undefined,
     modules: null,
-    managed_location_id: null,
+    managedLocationId: null,
   });
 
   useEffect(() => {
@@ -154,7 +154,10 @@ export default function UsersPage() {
       setError("Name, email, and password are required");
       return;
     }
-    if (createForm.role === "location_manager" && !createForm.managed_location_id) {
+    if (
+      createForm.role === "location_manager" &&
+      !createForm.managedLocationId
+    ) {
       setError("Please select a location for the Location manager");
       return;
     }
@@ -165,7 +168,10 @@ export default function UsersPage() {
     try {
       const payload: CreateUserPayload = {
         ...createForm,
-        managed_location_id: createForm.role === "location_manager" ? createForm.managed_location_id ?? undefined : undefined,
+        managedLocationId:
+          createForm.role === "location_manager"
+            ? createForm.managedLocationId ?? undefined
+            : undefined,
       };
       const newUser = await createUserApi(payload);
       setUsers((prev) => [...prev, newUser]);
@@ -183,18 +189,26 @@ export default function UsersPage() {
     setEditForm({
       role: user.role,
       modules: user.modules || null,
-      managed_location_id: user.managed_location_id ?? null,
+      managedLocationId: user.managedLocationId ?? null,
     });
   }
 
   function closeEditModal() {
     setEditingUser(null);
-    setEditForm({ role: undefined, modules: null, managed_location_id: null });
+    setEditForm({
+      role: undefined,
+      modules: null,
+      managedLocationId: null,
+    });
   }
 
   async function handleUpdateRole() {
     if (!editingUser) return;
-    if (isClient() && editForm.role === "location_manager" && !editForm.managed_location_id) {
+    if (
+      isClient() &&
+      editForm.role === "location_manager" &&
+      !editForm.managedLocationId
+    ) {
       setError("Please select a location for the Location manager");
       return;
     }
@@ -405,14 +419,14 @@ export default function UsersPage() {
                         </TableCell>
                         {isClient() && (
                           <TableCell className="text-sm text-text-secondary">
-                            {user.role === "location_manager" && user.managed_location_id
-                              ? locationMap.get(user.managed_location_id)?.name ?? user.managed_location_id
+                            {user.role === "location_manager" && user.managedLocationId
+                              ? locationMap.get(user.managedLocationId)?.name ?? user.managedLocationId
                               : "—"}
                           </TableCell>
                         )}
                         {isSuperAdmin() && (
                           <TableCell className="text-sm text-text-secondary">
-                            {user.client_id ? "Client Domain" : "Platform"}
+                            {user.clientAdminUserId ? "Client Domain" : "Platform"}
                           </TableCell>
                         )}
                         <TableCell>
@@ -516,7 +530,10 @@ export default function UsersPage() {
                 setCreateForm((prev) => ({
                   ...prev,
                   role: e.target.value as CreateUserPayload["role"],
-                  managed_location_id: e.target.value === "location_manager" ? prev.managed_location_id : undefined,
+                  managedLocationId:
+                    e.target.value === "location_manager"
+                      ? prev.managedLocationId
+                      : undefined,
                 }))
               }
               className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
@@ -534,11 +551,11 @@ export default function UsersPage() {
                 Assigned Location *
               </label>
               <select
-                value={createForm.managed_location_id ?? ""}
+                value={createForm.managedLocationId ?? ""}
                 onChange={(e) =>
                   setCreateForm((prev) => ({
                     ...prev,
-                    managed_location_id: e.target.value || undefined,
+                    managedLocationId: e.target.value || undefined,
                   }))
                 }
                 className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
@@ -598,7 +615,10 @@ export default function UsersPage() {
                   setEditForm((prev) => ({
                     ...prev,
                     role: e.target.value as UpdateUserRolePayload["role"],
-                    managed_location_id: e.target.value === "location_manager" ? prev.managed_location_id : null,
+                    managedLocationId:
+                      e.target.value === "location_manager"
+                        ? prev.managedLocationId
+                        : null,
                   }))
                 }
                 className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
@@ -616,11 +636,11 @@ export default function UsersPage() {
                   Assigned Location *
                 </label>
                 <select
-                  value={editForm.managed_location_id ?? ""}
+                  value={editForm.managedLocationId ?? ""}
                   onChange={(e) =>
                     setEditForm((prev) => ({
                       ...prev,
-                      managed_location_id: e.target.value || null,
+                      managedLocationId: e.target.value || null,
                     }))
                   }
                   className="w-full rounded-lg border border-border-primary bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"

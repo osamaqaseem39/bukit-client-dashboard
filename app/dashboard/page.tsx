@@ -182,7 +182,7 @@ export default function DashboardPage() {
 
         const clientIdForQueries =
           user?.role === "client"
-            ? (user.client_id ?? user.id ?? undefined)
+            ? (user.clientAdminUserId ?? user.id ?? undefined)
             : undefined;
 
         const [bookingsRes, statsRes, locationsRes] =

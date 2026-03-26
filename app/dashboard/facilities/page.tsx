@@ -26,8 +26,12 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
-/** Arena-only facility types for this dashboard. */
+/** Facility types supported in this dashboard. */
 const FACILITY_TYPES = [
+  { value: "gaming-pc", label: "Gaming PC" },
+  { value: "ps4", label: "PS4" },
+  { value: "ps5", label: "PS5" },
+  { value: "xbox", label: "Xbox" },
   { value: "futsal-field", label: "Futsal Field" },
   { value: "cricket-pitch", label: "Cricket Pitch" },
   { value: "padel-court", label: "Padel Court" },
@@ -35,9 +39,18 @@ const FACILITY_TYPES = [
 
 type FacilityTypeValue = (typeof FACILITY_TYPES)[number]["value"];
 const ARENA_FACILITY_TYPES = ["futsal-field", "cricket-pitch", "padel-court"] as const;
+const GAMING_FACILITY_TYPES = ["gaming-pc", "ps4", "ps5", "xbox"] as const;
 
 function isArenaFacilityType(type: string): type is FacilityTypeValue {
   return (ARENA_FACILITY_TYPES as readonly string[]).includes(type);
+}
+
+function isGamingFacilityType(type: string): type is FacilityTypeValue {
+  return (GAMING_FACILITY_TYPES as readonly string[]).includes(type);
+}
+
+function isPcFacilityType(type: string): type is "gaming-pc" {
+  return type === "gaming-pc";
 }
 
 interface PcEntry {
@@ -76,6 +89,58 @@ interface ArenaPricingState {
   currency: string;
 }
 
+interface GamingPcFacilityMetadataDto {
+  pcs?: Array<{
+    label?: string;
+    cpu?: string;
+    gpu?: string;
+    ram?: string;
+    refresh_rate_hz?: number;
+  }>;
+  games_available?: string;
+  pricing?: {
+    per_minute?: {
+      rate_per_minute: number;
+      currency: string;
+      billing_interval_minutes: number;
+      minimum_minutes?: number;
+    };
+    packages?: Array<{
+      id: string;
+      title: string;
+      minutes: number;
+      price: number;
+      currency: string;
+      validity_hours?: number;
+    }>;
+  };
+}
+
+interface GamingConsoleFacilityMetadataDto {
+  stations?: Array<{
+    label?: string;
+    screen_size_inches?: number;
+  }>;
+  games_available?: string;
+  pricing?: GamingPcFacilityMetadataDto["pricing"];
+}
+
+interface ArenaFacilityMetadataDto {
+  arena_dimensions?: {
+    height: number;
+    length: number;
+    width: number;
+    unit: "ft" | "m";
+  };
+  court_size_mode?: CourtSizeMode;
+  pricing?: {
+    per_hour?: {
+      rate_per_hour: number;
+      currency: string;
+    };
+  };
+}
+
 interface FacilityFormState {
   name: string;
   type: FacilityTypeValue;
@@ -96,6 +161,7 @@ interface FacilityFormState {
   arenaPricing: ArenaPricingState;
   courtSizeMode: CourtSizeMode;
 }
+type FacilityFormMode = "basic" | "details";
 
 function makeId(prefix: string) {
   // Avoid relying on crypto.randomUUID in older browsers.
@@ -116,6 +182,7 @@ export default function FacilitiesPage() {
 
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState<FacilityFormMode>("basic");
   const [formState, setFormState] = useState<FacilityFormState>({
     name: "",
     type: "futsal-field",
@@ -185,10 +252,13 @@ export default function FacilitiesPage() {
   }
 
   function openCreateForm() {
+    setFormMode("basic");
     setEditingFacility(null);
+    const defaultType = (allowedFacilityTypesForLocation[0] ||
+      "futsal-field") as FacilityTypeValue;
     setFormState({
       name: "",
-      type: "futsal-field",
+      type: defaultType,
       status: "active",
       pcs: [{ label: "PC 1", cpu: "", gpu: "", ram: "", refreshRate: "" }],
       stations: [{ label: "Station 1", screenSizeInches: "" }],
@@ -215,7 +285,22 @@ export default function FacilitiesPage() {
     setShowForm(true);
   }
 
-  function openEditForm(facility: Facility) {
+  function openBasicEditForm(facility: Facility) {
+    setFormMode("basic");
+    setEditingFacility(facility);
+    setFormState((prev) => ({
+      ...prev,
+      name: facility.name,
+      type: FACILITY_TYPES.some((entry) => entry.value === facility.type)
+        ? (facility.type as FacilityTypeValue)
+        : "futsal-field",
+      status: facility.status,
+    }));
+    setShowForm(true);
+  }
+
+  function openDetailsForm(facility: Facility) {
+    setFormMode("details");
     setEditingFacility(facility);
     const meta = (facility.metadata || {}) as Record<string, any>;
     const pcsRaw = Array.isArray(meta.pcs) ? meta.pcs : [];
@@ -312,7 +397,9 @@ export default function FacilitiesPage() {
 
     setFormState({
       name: facility.name,
-      type: (facility.type as FacilityTypeValue) || "futsal-field",
+      type: FACILITY_TYPES.some((entry) => entry.value === facility.type)
+        ? (facility.type as FacilityTypeValue)
+        : "futsal-field",
       status: facility.status,
       pcs,
       stations,
@@ -327,11 +414,15 @@ export default function FacilitiesPage() {
   }
 
   function closeForm() {
+    setFormMode("basic");
     setShowForm(false);
     setEditingFacility(null);
   }
 
-  function buildMetadata(): Record<string, any> | undefined {
+  function buildGamingMetadata():
+    | GamingPcFacilityMetadataDto
+    | GamingConsoleFacilityMetadataDto
+    | undefined {
     const {
       type,
       pcs,
@@ -339,37 +430,102 @@ export default function FacilitiesPage() {
       gamesAvailable,
       pricingPerMinute,
       pricingPackages,
-      arenaDimensions,
-      arenaPricing,
-      courtSizeMode,
     } = formState;
-    const meta: Record<string, any> = {};
+    if (!isGamingFacilityType(type)) return undefined;
+    const meta: GamingPcFacilityMetadataDto | GamingConsoleFacilityMetadataDto = {};
 
-    // Pricing (mainly for gaming facilities)
-    const packages = (pricingPackages || [])
-      .map((p) => {
-        const title = (p.title || "").trim();
-        const minutes = p.minutes.trim() ? Number(p.minutes) : NaN;
-        const price = p.price.trim() ? Number(p.price) : NaN;
-        const currency = (p.currency || "").trim();
-        const validity_hours = p.validityHours.trim()
-          ? Number(p.validityHours)
-          : undefined;
-        if (!title && !p.minutes.trim() && !p.price.trim() && !currency) return null;
-        return {
-          id: p.id || makeId("pkg"),
-          title: title || undefined,
-          minutes: Number.isFinite(minutes) && minutes > 0 ? minutes : undefined,
-          price: Number.isFinite(price) && price >= 0 ? price : undefined,
-          currency: currency || undefined,
-          validity_hours:
-            validity_hours != null && Number.isFinite(validity_hours) && validity_hours > 0
-              ? validity_hours
+    if (isPcFacilityType(type)) {
+      const cleanPcs = (pcs || [])
+        .map((pc) => ({
+          label: (pc.label || "").trim(),
+          cpu: (pc.cpu || "").trim(),
+          gpu: (pc.gpu || "").trim(),
+          ram: (pc.ram || "").trim(),
+          refresh_rate_hz: pc.refreshRate.trim() ? Number(pc.refreshRate) : undefined,
+        }))
+        .filter(
+          (pc) =>
+            pc.label ||
+            pc.cpu ||
+            pc.gpu ||
+            pc.ram ||
+            (pc.refresh_rate_hz != null && Number.isFinite(pc.refresh_rate_hz))
+        )
+        .map((pc) => ({
+          ...pc,
+          refresh_rate_hz:
+            pc.refresh_rate_hz != null && Number.isFinite(pc.refresh_rate_hz)
+              ? pc.refresh_rate_hz
               : undefined,
-        };
-      })
-      .filter(Boolean)
-      .filter((p: any) => p.title && p.minutes && p.currency && p.price != null);
+        }));
+      if (cleanPcs.length) {
+        (meta as GamingPcFacilityMetadataDto).pcs = cleanPcs;
+      }
+    } else {
+      const cleanStations = (stations || [])
+        .map((station) => ({
+          label: (station.label || "").trim(),
+          screen_size_inches: station.screenSizeInches.trim()
+            ? Number(station.screenSizeInches)
+            : undefined,
+        }))
+        .filter(
+          (station) =>
+            station.label ||
+            (station.screen_size_inches != null && Number.isFinite(station.screen_size_inches))
+        )
+        .map((station) => ({
+          ...station,
+          screen_size_inches:
+            station.screen_size_inches != null && Number.isFinite(station.screen_size_inches)
+              ? station.screen_size_inches
+              : undefined,
+        }));
+      if (cleanStations.length) {
+        (meta as GamingConsoleFacilityMetadataDto).stations = cleanStations;
+      }
+    }
+
+    const games = (gamesAvailable || "").trim();
+    if (games) {
+      meta.games_available = games;
+    }
+
+    const packages: NonNullable<GamingPcFacilityMetadataDto["pricing"]>["packages"] =
+      [];
+    for (const p of pricingPackages || []) {
+      const title = (p.title || "").trim();
+      const minutes = p.minutes.trim() ? Number(p.minutes) : NaN;
+      const price = p.price.trim() ? Number(p.price) : NaN;
+      const currency = (p.currency || "").trim();
+      const validity_hours = p.validityHours.trim()
+        ? Number(p.validityHours)
+        : undefined;
+      if (!title && !p.minutes.trim() && !p.price.trim() && !currency) continue;
+      if (
+        !(
+          title &&
+          Number.isFinite(minutes) &&
+          minutes > 0 &&
+          Number.isFinite(price) &&
+          price >= 0 &&
+          currency
+        )
+      ) {
+        continue;
+      }
+      packages.push({
+        id: p.id || makeId("pkg"),
+        title,
+        minutes,
+        price,
+        currency,
+        validity_hours:
+          validity_hours != null && Number.isFinite(validity_hours) && validity_hours > 0
+            ? validity_hours
+            : undefined,
+      });
+    }
 
     const rate = pricingPerMinute.ratePerMinute.trim()
       ? Number(pricingPerMinute.ratePerMinute)
@@ -383,7 +539,11 @@ export default function FacilitiesPage() {
     const currency = (pricingPerMinute.currency || "").trim();
 
     const per_minute =
-      Number.isFinite(rate) && rate >= 0 && Number.isFinite(interval) && interval > 0 && currency
+      Number.isFinite(rate) &&
+      rate >= 0 &&
+      Number.isFinite(interval) &&
+      interval > 0 &&
+      currency
         ? {
             rate_per_minute: rate,
             currency,
@@ -401,8 +561,14 @@ export default function FacilitiesPage() {
         ...(per_minute ? { per_minute } : {}),
       };
     }
+    return Object.keys(meta).length ? meta : undefined;
+  }
 
-    if (isArenaFacilityType(type)) {
+  function buildArenaMetadata(): ArenaFacilityMetadataDto | undefined {
+    const { type, arenaDimensions, arenaPricing, courtSizeMode } = formState;
+    if (!isArenaFacilityType(type)) return undefined;
+    const meta: ArenaFacilityMetadataDto = {};
+
       const arenaLength = arenaDimensions.length.trim()
         ? Number(arenaDimensions.length)
         : NaN;
@@ -432,22 +598,28 @@ export default function FacilitiesPage() {
       if (courtSizeMode) {
         meta.court_size_mode = courtSizeMode;
       }
-      if (
-        Number.isFinite(arenaRatePerHour) &&
-        arenaRatePerHour >= 0 &&
-        arenaCurrency
-      ) {
-        meta.pricing = {
-          ...(meta.pricing || {}),
-          per_hour: {
-            rate_per_hour: arenaRatePerHour,
-            currency: arenaCurrency,
-          },
-        };
-      }
+    if (
+      Number.isFinite(arenaRatePerHour) &&
+      arenaRatePerHour >= 0 &&
+      arenaCurrency
+    ) {
+      meta.pricing = {
+        ...(meta.pricing || {}),
+        per_hour: {
+          rate_per_hour: arenaRatePerHour,
+          currency: arenaCurrency,
+        },
+      };
     }
-
     return Object.keys(meta).length ? meta : undefined;
+  }
+
+  function buildMetadata():
+    | GamingPcFacilityMetadataDto
+    | GamingConsoleFacilityMetadataDto
+    | ArenaFacilityMetadataDto
+    | undefined {
+    return buildGamingMetadata() || buildArenaMetadata();
   }
 
   async function handleSave() {
@@ -456,8 +628,13 @@ export default function FacilitiesPage() {
       return;
     }
 
-    if (!formState.name.trim()) {
+    if (formMode === "basic" && !formState.name.trim()) {
       setError("Facility name is required");
+      return;
+    }
+
+    if (formMode === "details" && !editingFacility) {
+      setError("Select a facility first");
       return;
     }
 
@@ -465,21 +642,30 @@ export default function FacilitiesPage() {
     setError(null);
 
     try {
-      const payload: CreateFacilityPayload = {
-        name: formState.name.trim(),
-        type: formState.type,
-        status: formState.status,
-        metadata: buildMetadata(),
-      };
+      if (formMode === "basic") {
+        const payload: CreateFacilityPayload = {
+          name: formState.name.trim(),
+          type: formState.type,
+          status: formState.status,
+        };
 
-      if (editingFacility) {
+        if (editingFacility) {
+          await updateFacilityAtLocationApi(
+            selectedLocationId,
+            editingFacility.id,
+            payload,
+          );
+        } else {
+          await createFacilityAtLocationApi(selectedLocationId, payload);
+        }
+      } else {
         await updateFacilityAtLocationApi(
           selectedLocationId,
-          editingFacility.id,
-          payload,
+          editingFacility!.id,
+          {
+            metadata: buildMetadata(),
+          },
         );
-      } else {
-        await createFacilityAtLocationApi(selectedLocationId, payload);
       }
 
       await loadFacilities(selectedLocationId);
@@ -487,7 +673,13 @@ export default function FacilitiesPage() {
     } catch (err: any) {
       setError(
         err.message ||
-          `Failed to ${editingFacility ? "update" : "create"} facility`,
+          `Failed to ${
+            formMode === "details"
+              ? "save facility details"
+              : editingFacility
+                ? "update"
+                : "create"
+          }`,
       );
     } finally {
       setSaving(false);
@@ -515,6 +707,25 @@ export default function FacilitiesPage() {
     () => locations.find((loc) => loc.id === selectedLocationId) || null,
     [locations, selectedLocationId],
   );
+  const allowedFacilityTypesForLocation = useMemo(() => {
+    const assigned = selectedLocation?.facility_types || [];
+    if (!assigned || assigned.length === 0) return FACILITY_TYPES.map((f) => f.value);
+
+    const mapped = new Set<string>();
+    for (const t of assigned) {
+      if (t === "arena") {
+        for (const arenaType of ARENA_FACILITY_TYPES) mapped.add(arenaType);
+        continue;
+      }
+      if (t === "gaming-zone") {
+        for (const gamingType of GAMING_FACILITY_TYPES) mapped.add(gamingType);
+        continue;
+      }
+      mapped.add(t);
+    }
+    const filtered = FACILITY_TYPES.map((f) => f.value).filter((type) => mapped.has(type));
+    return filtered.length ? filtered : FACILITY_TYPES.map((f) => f.value);
+  }, [selectedLocation]);
 
   return (
     <div className="space-y-6">
@@ -631,9 +842,16 @@ export default function FacilitiesPage() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => openEditForm(facility)}
+                        onClick={() => openBasicEditForm(facility)}
                       >
                         <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => openDetailsForm(facility)}
+                      >
+                        Configure
                       </Button>
                       <Button
                         variant="destructive"
@@ -673,69 +891,492 @@ export default function FacilitiesPage() {
         <Card className="mx-auto w-full max-w-4xl">
           <CardHeader>
             <h2 className="text-lg font-medium text-text-primary">
-              {editingFacility ? "Edit Facility" : "Add Facility"}
+              {formMode === "basic"
+                ? editingFacility
+                  ? "Edit Facility"
+                  : "Add Facility"
+                : `Configure ${editingFacility?.name || "Facility"} Details`}
             </h2>
             <p className="mt-1 text-sm text-text-secondary">
-              {editingFacility
-                ? "Update the facility details below."
-                : "Enter the new facility details for the selected location."}
+              {formMode === "basic"
+                ? editingFacility
+                  ? "Update basic facility information."
+                  : "Create the facility first. Then configure details separately."
+                : "Fill the dedicated details form for this facility type and save."}
             </p>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Input
-                label="Facility Name *"
-                value={formState.name}
-                onChange={(e) =>
-                  setFormState((prev) => ({ ...prev, name: e.target.value }))
-                }
-                placeholder="e.g. Futsal Court A"
-              />
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-text-secondary">
-                    Facility type
-                  </label>
-                  <select
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                    value={formState.type}
-                    onChange={(e) => {
-                      const newType = e.target.value as FacilityTypeValue;
-                      setFormState((prev) => {
-                        const next = { ...prev, type: newType };
-                        return next;
-                      });
-                    }}
-                  >
-                    {FACILITY_TYPES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-text-secondary">
-                    Status
-                  </label>
-                  <select
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
-                    value={formState.status}
+              {formMode === "basic" && (
+                <>
+                  <Input
+                    label="Facility Name *"
+                    value={formState.name}
+                    onChange={(e) =>
+                      setFormState((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                    placeholder="e.g. Futsal Court A"
+                  />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-text-secondary">
+                        Facility type
+                      </label>
+                      <select
+                        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                        value={formState.type}
+                        onChange={(e) => {
+                          const newType = e.target.value as FacilityTypeValue;
+                          setFormState((prev) => ({ ...prev, type: newType }));
+                        }}
+                      >
+                        {FACILITY_TYPES.filter((opt) =>
+                          allowedFacilityTypesForLocation.includes(opt.value)
+                        ).map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-text-secondary">
+                        Status
+                      </label>
+                      <select
+                        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+                        value={formState.status}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            status: e.target.value as FacilityStatus,
+                          }))
+                        }
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="maintenance">Maintenance</option>
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {formMode === "details" && isGamingFacilityType(formState.type) && (
+                <div className="space-y-4 rounded-lg border border-border bg-surface/50 p-4">
+                  <div className="text-sm font-medium text-text-primary">
+                    Gaming zone setup details
+                  </div>
+
+                  {isPcFacilityType(formState.type) ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-medium text-text-secondary">PC units</div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pcs: [
+                                ...prev.pcs,
+                                {
+                                  label: `PC ${prev.pcs.length + 1}`,
+                                  cpu: "",
+                                  gpu: "",
+                                  ram: "",
+                                  refreshRate: "",
+                                },
+                              ],
+                            }))
+                          }
+                        >
+                          <Plus className="mr-1 h-4 w-4" />
+                          Add PC
+                        </Button>
+                      </div>
+                      {formState.pcs.map((pc, idx) => (
+                        <div key={`${pc.label}_${idx}`} className="rounded-md border border-border p-3">
+                          <div className="mb-2 flex justify-end">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={formState.pcs.length <= 1}
+                              onClick={() =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pcs: prev.pcs.filter((_, i) => i !== idx),
+                                }))
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <Input
+                              label="PC label"
+                              value={pc.label}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pcs: prev.pcs.map((entry, i) =>
+                                    i === idx ? { ...entry, label: e.target.value } : entry
+                                  ),
+                                }))
+                              }
+                            />
+                            <Input
+                              label="CPU"
+                              value={pc.cpu}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pcs: prev.pcs.map((entry, i) =>
+                                    i === idx ? { ...entry, cpu: e.target.value } : entry
+                                  ),
+                                }))
+                              }
+                            />
+                            <Input
+                              label="GPU"
+                              value={pc.gpu}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pcs: prev.pcs.map((entry, i) =>
+                                    i === idx ? { ...entry, gpu: e.target.value } : entry
+                                  ),
+                                }))
+                              }
+                            />
+                            <Input
+                              label="RAM"
+                              value={pc.ram}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pcs: prev.pcs.map((entry, i) =>
+                                    i === idx ? { ...entry, ram: e.target.value } : entry
+                                  ),
+                                }))
+                              }
+                            />
+                            <Input
+                              label="Refresh rate (Hz)"
+                              type="number"
+                              step="1"
+                              value={pc.refreshRate}
+                              onChange={(e) =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pcs: prev.pcs.map((entry, i) =>
+                                    i === idx
+                                      ? { ...entry, refreshRate: e.target.value }
+                                      : entry
+                                  ),
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-medium text-text-secondary">
+                          Console stations
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              stations: [
+                                ...prev.stations,
+                                {
+                                  label: `Station ${prev.stations.length + 1}`,
+                                  screenSizeInches: "",
+                                },
+                              ],
+                            }))
+                          }
+                        >
+                          <Plus className="mr-1 h-4 w-4" />
+                          Add Station
+                        </Button>
+                      </div>
+                      {formState.stations.map((station, idx) => (
+                        <div
+                          key={`${station.label}_${idx}`}
+                          className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-2"
+                        >
+                          <Input
+                            label="Station label"
+                            value={station.label}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                stations: prev.stations.map((entry, i) =>
+                                  i === idx ? { ...entry, label: e.target.value } : entry
+                                ),
+                              }))
+                            }
+                          />
+                          <Input
+                            label="Screen size (inches)"
+                            type="number"
+                            step="any"
+                            value={station.screenSizeInches}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                stations: prev.stations.map((entry, i) =>
+                                  i === idx
+                                    ? { ...entry, screenSizeInches: e.target.value }
+                                    : entry
+                                ),
+                              }))
+                            }
+                          />
+                          <div className="md:col-span-2 flex justify-end">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={formState.stations.length <= 1}
+                              onClick={() =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  stations: prev.stations.filter((_, i) => i !== idx),
+                                }))
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <Input
+                    label="Games available (comma separated)"
+                    placeholder="e.g. FC 25, Tekken 8, Valorant"
+                    value={formState.gamesAvailable}
                     onChange={(e) =>
                       setFormState((prev) => ({
                         ...prev,
-                        status: e.target.value as FacilityStatus,
+                        gamesAvailable: e.target.value,
                       }))
                     }
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="maintenance">Maintenance</option>
-                  </select>
-                </div>
-              </div>
+                  />
 
-              {isArenaFacilityType(formState.type) && (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <Input
+                      label="Per-minute rate"
+                      type="number"
+                      step="any"
+                      value={formState.pricingPerMinute.ratePerMinute}
+                      onChange={(e) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          pricingPerMinute: {
+                            ...prev.pricingPerMinute,
+                            ratePerMinute: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                    <Input
+                      label="Currency"
+                      value={formState.pricingPerMinute.currency}
+                      onChange={(e) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          pricingPerMinute: {
+                            ...prev.pricingPerMinute,
+                            currency: e.target.value.toUpperCase(),
+                          },
+                        }))
+                      }
+                    />
+                    <Input
+                      label="Billing interval (min)"
+                      type="number"
+                      step="1"
+                      value={formState.pricingPerMinute.billingIntervalMinutes}
+                      onChange={(e) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          pricingPerMinute: {
+                            ...prev.pricingPerMinute,
+                            billingIntervalMinutes: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                    <Input
+                      label="Minimum minutes"
+                      type="number"
+                      step="1"
+                      value={formState.pricingPerMinute.minimumMinutes}
+                      onChange={(e) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          pricingPerMinute: {
+                            ...prev.pricingPerMinute,
+                            minimumMinutes: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-medium text-text-secondary">Packages</div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            pricingPackages: [
+                              ...prev.pricingPackages,
+                              {
+                                id: makeId("pkg"),
+                                title: "",
+                                minutes: "",
+                                price: "",
+                                currency: prev.pricingPerMinute.currency || "PKR",
+                                validityHours: "",
+                              },
+                            ],
+                          }))
+                        }
+                      >
+                        <Plus className="mr-1 h-4 w-4" />
+                        Add Package
+                      </Button>
+                    </div>
+                    {formState.pricingPackages.map((pkg, idx) => (
+                      <div
+                        key={pkg.id}
+                        className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-6"
+                      >
+                        <div className="md:col-span-2">
+                          <Input
+                            label="Title"
+                            value={pkg.title}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                pricingPackages: prev.pricingPackages.map((entry, i) =>
+                                  i === idx ? { ...entry, title: e.target.value } : entry
+                                ),
+                              }))
+                            }
+                          />
+                        </div>
+                        <Input
+                          label="Minutes"
+                          type="number"
+                          step="1"
+                          value={pkg.minutes}
+                          onChange={(e) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingPackages: prev.pricingPackages.map((entry, i) =>
+                                i === idx ? { ...entry, minutes: e.target.value } : entry
+                              ),
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Price"
+                          type="number"
+                          step="any"
+                          value={pkg.price}
+                          onChange={(e) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingPackages: prev.pricingPackages.map((entry, i) =>
+                                i === idx ? { ...entry, price: e.target.value } : entry
+                              ),
+                            }))
+                          }
+                        />
+                        <Input
+                          label="Currency"
+                          value={pkg.currency}
+                          onChange={(e) =>
+                            setFormState((prev) => ({
+                              ...prev,
+                              pricingPackages: prev.pricingPackages.map((entry, i) =>
+                                i === idx
+                                  ? { ...entry, currency: e.target.value.toUpperCase() }
+                                  : entry
+                              ),
+                            }))
+                          }
+                        />
+                        <div className="space-y-1">
+                          <Input
+                            label="Validity (hours)"
+                            type="number"
+                            step="1"
+                            value={pkg.validityHours}
+                            onChange={(e) =>
+                              setFormState((prev) => ({
+                                ...prev,
+                                pricingPackages: prev.pricingPackages.map((entry, i) =>
+                                  i === idx
+                                    ? { ...entry, validityHours: e.target.value }
+                                    : entry
+                                ),
+                              }))
+                            }
+                          />
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages: [
+                                    ...prev.pricingPackages,
+                                    { ...pkg, id: makeId("pkg-copy") },
+                                  ],
+                                }))
+                              }
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                setFormState((prev) => ({
+                                  ...prev,
+                                  pricingPackages: prev.pricingPackages.filter(
+                                    (_, i) => i !== idx
+                                  ),
+                                }))
+                              }
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {formMode === "details" && isArenaFacilityType(formState.type) && (
                 <div className="space-y-4 rounded-lg border border-border bg-surface/50 p-4">
                   <div className="text-sm font-medium text-text-primary">
                     Arena booking details
@@ -887,7 +1528,11 @@ export default function FacilitiesPage() {
                       Saving...
                     </>
                   ) : (
-                    "Save"
+                    formMode === "basic"
+                      ? editingFacility
+                        ? "Save Basic Info"
+                        : "Create Facility"
+                      : "Save Details"
                   )}
                 </Button>
               </div>

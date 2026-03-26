@@ -328,9 +328,12 @@ export default function SettingsPage() {
             <div className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
               {user?.role?.replace("_", " ").toUpperCase() || "USER"}
             </div>
-            {user?.client_id && (
+            {user?.clientAdminUserId && (
               <p className="mt-2 text-xs text-text-secondary">
-                Domain: {user.client_id === user.id ? "Own Domain" : "Client Domain"}
+                Domain:{' '}
+                {user.clientAdminUserId === user.id
+                  ? "Own Domain"
+                  : "Client Domain"}
               </p>
             )}
           </div>

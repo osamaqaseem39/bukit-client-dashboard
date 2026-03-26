@@ -27,13 +27,13 @@ interface User {
   name: string;
   role: UserRole;
   /**
-   * Optional client_id for users that belong to a client admin's domain.
+   * Optional client admin user id for users in a client admin's domain.
    */
-  client_id?: string | null;
+  clientAdminUserId?: string | null;
   /**
    * When role is location_manager, the single location this user manages.
    */
-  managed_location_id?: string | null;
+  managedLocationId?: string | null;
   /**
    * Optional list of dashboard modules this user is allowed to see.
    *

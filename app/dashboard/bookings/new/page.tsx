@@ -134,8 +134,8 @@ export default function NewBookingPage() {
   const pathname = usePathname();
   const { user } = useAuth();
   const isLocationManager =
-    user?.role === "location_manager" && Boolean(user?.managed_location_id);
-  const managedLocationId = user?.managed_location_id ?? null;
+    user?.role === "location_manager" && Boolean(user?.managedLocationId);
+  const managedLocationId = user?.managedLocationId ?? null;
 
   const allowedFacilityTypes = useMemo(() => {
     if (pathname.includes("/dashboard/arena")) {
