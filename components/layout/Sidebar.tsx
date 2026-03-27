@@ -19,6 +19,7 @@ import {
   Activity,
   Briefcase,
   Building2,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DashboardModuleKey } from "@/lib/api";
@@ -163,6 +164,12 @@ const navItems: NavItem[] = [
     roles: ["client", "location_manager"],
   },
   {
+    label: "Billing / Invoice",
+    href: "/dashboard/billing",
+    icon: <Receipt className="h-5 w-5" />,
+    roles: ["client", "location_manager"],
+  },
+  {
     label: "Users",
     href: "/dashboard/users",
     icon: <Users className="h-5 w-5" />,
@@ -219,6 +226,7 @@ export default function Sidebar() {
   const clientBottomLabels = [
     "Locations",
     "Facilities",
+    "Billing / Invoice",
     "Games Setup",
     "Prices Setup",
     "Packages Setup",
